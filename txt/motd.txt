@@ -1,0 +1,7 @@
+Welcome to the PurlMUSH development installation. We are currently in our
+infancy, and welcome suggestions. Please contact purlmush@gmail.com with
+any and all suggestions.
+
+Thanks,
+PurlMUSH Dev Team (aka Santiago) 
+

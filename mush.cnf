@@ -1,0 +1,65 @@
+#IMPORTANT: change these configuration settings to suit your site. You may want
+#to be much more careful about what players can do!
+
+#Port number to listen for tiny line protocol connections on 
+$tinypPort = 8301;
+
+#IP address to listen on. If this is set to 0.0.0.0, then PurlMUSH will answer 
+#on all interfaces. If it is set to a specific IP address, PurlMUSH will only 
+#answer on that interface.
+
+#$ipAddress = "206.125.69.87";
+$ipAddress = "0.0.0.0";
+
+#What do you want to call your MUSH?
+
+$serverName = "PurlMUSH";
+
+#What is the complete ** Internet host name ** of your server? This goes out 
+#This must be a REAL host name for the server -- just putting something here 
+#won't magically add a new name to your DNS!
+
+$hostName = "supermassive.blackhole-ninjas.net";
+
+#Version of PurlMUSH.
+$Version = 0.2;
+
+#Should users be allowed to create objects and rooms by default? Set this to 0 
+#if you prefer not.
+
+$allowBuild = 1;
+
+#Should users be allowed to @emit things without their name prefixed? Set this 
+#to zero if you prefer not.
+
+$allowEmit = 1;
+
+#File locations for the database, the login screen banner, the Message of the 
+#Day, and the help file. 
+
+$dbFile = "data/mush.db";
+$welcomeFile = "txt/welcome.txt";
+$motdFile = "txt/motd.txt";
+$helpFile = "txt/help.txt";
+
+#Idle timeout. This hangs up on users if they do not enter at least one command 
+#in the time interval (specified in seconds; 3600 is an hour).
+ 
+$idleTimeout = 86400;
+
+#Time to wait between (brief) attempts at closing sockets we don't need anymore.
+#The longer this is, the fewer pauses the mud will experience.
+
+$fdClosureInterval = 30;
+
+#Interval between automatic backups of the database, in seconds (1 hour).
+#Note: stale topics are also sent home during this pass.
+$dumpinterval = 3600;
+
+#Seconds until a topic is considered stale.
+$topicStaleTime = 3000;
+
+#Max size of output buffer before flushing takes place
+$flushOutput = 32768;
+
+

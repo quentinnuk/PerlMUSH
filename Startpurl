@@ -1,0 +1,122 @@
+#!/usr/local/bin/perl
+
+#PurlMUSH 0.2 by Don Burks
+#Originally based on PerlMUD 3.0, by Boutell.Com, Inc.
+#
+#SEE CONFIGURATION SETTINGS in mudlib.pl.
+#
+
+#The directory where PurlMUSH can expect to find all of its data files, and
+#the mudlib.pl file. All other settings and all non-initialization code are in
+#mudlib.pl. This allows the @reload command to be used to install new code on
+#the fly (of course, there is still a good chance of crashing the mud if the 
+#new code is buggy, but it can sometimes avoid the need for a restart).
+
+$dataDirectory = "/home/purl/purl";
+
+require "$dataDirectory/mush.cnf";
+require "$dataDirectory/mush_lib";
+
+require 5.001;
+use Fcntl;
+use Socket;
+use POSIX;
+use Safe;
+use Digest::MD5 qw(md5_base64);
+
+require "flush.pl";
+
+if (!chdir($dataDirectory)) {
+	print "The MUSH server could not change to the \nworking directory: $dataDirectory \nPlease read the documentation and follow\n",
+		"all of the instructions carefully.\n";
+	exit 0;
+}	
+
+if ($hostName =~ /CHANGEME/) {
+	print "The \$hostName configuration variable has not been set.\nThis configuration variable must be set to the Internet host name of your server\n",
+		"so users can be told how to connect. Please read the\n documentation and follow all of the instructions carefully.\n";	
+	exit 0;
+}
+
+#Start time
+
+$now = time;
+
+srand($now + $$);
+
+$initialized = $now;
+$lastdump = $now;
+$lastFdClosure = $now;
+
+#Create initial db (commented out)
+
+#&mindb;
+
+#Load db
+
+if (!&restore) {
+	print "Can't start the mud with this database.\n";
+	exit 0;
+}
+
+#Name first file descriptor
+
+$fdBase = "FD";
+$fdNum = 0;
+
+#Set up listener socket
+
+$sockaddr = 'S n a4 x8';
+($name, $aliases, $proto) = getprotobyname("tcp"); 
+
+@addr = split(/\./, $ipAddress); 
+$this = pack($sockaddr, AF_INET, $tinypPort, pack("CCCC", @addr));
+
+if (!socket(TINYP_LISTENER, AF_INET, SOCK_STREAM, $proto)) {
+	print "Couldn't create listener socket.\n";
+	print "This Perl implementation probably does not support sockets.\n";
+	exit 1;
+}
+
+#Make sure we can reuse this quickly after a shutdown
+setsockopt(TINYP_LISTENER, SOL_SOCKET, SO_REUSEADDR, $this);
+setsockopt(TINYP_LISTENER, SOL_SOCKET, SO_KEEPALIVE, $this);
+
+#Always set linger; we'll make many brief attempts to close the socket to avoid responsiveness problems
+
+setsockopt(TINYP_LISTENER, SOL_SOCKET, SO_LINGER, 1);
+
+#Get the port
+
+if (!bind(TINYP_LISTENER, $this)) {
+	print "Couldn't bind to port ", $tinypPort, ".\n";
+	close(TINYP_LISTENER);
+	exit 1;
+}
+
+fcntl(TINYP_LISTENER, F_SETFL, O_NONBLOCK);
+
+if (!listen(TINYP_LISTENER, 5)) {
+	print "Couldn't initiate listening for connections.\n";
+	close(TINYP_LISTENER);
+	exit 1;
+}
+
+while (1) {
+	# Select loop
+	&selectPass;
+	if ($reloadFlag) {
+		my($file) = "$dataDirectory/mudlib.pl";
+		my $return = do $file;
+		if ($return) {
+			&tellWizards("Reloaded $file successfully.");
+		} else {
+			# Hopefully the programmer didn't break tellWizards!
+			&tellWizards("Couldn't parse $file: $@") if $@;
+			&tellWizards("Couldn't do $file: $!") unless defined $return;
+			&tellWizards("Couldn't run $file") unless $return;
+		}
+		$reloadFlag = 0;
+        }
+}
+

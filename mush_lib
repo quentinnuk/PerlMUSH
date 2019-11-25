@@ -1,0 +1,3275 @@
+#PurlMUSH - v0.2 by Don Burks - Rebuilding where the devastation of Delilah 
+#left off. Unilateral credit goes to Thomas Boutell at Boutell.com for 
+#originally developing PerlMUD, upon which a fair bit of this code is based.
+#Credit must also go to Antonio@ChicagoMUSH, aka Steele of steelemountain.com 
+#fame for SO much guidance and advice in this project. I miss you, my friend.
+
+#This file can be reloaded in response to the @reload command (wizard only of 
+#course). Code accordingly: don't assume that lists will be empty, etc. in any 
+#initialization you do here.
+
+#Nothing below here should require changes to set up the mush
+	
+#Protocols 
+
+$tinyp = 0;
+
+#Object types
+
+$room = 1;
+$player = 2;
+$exit = 3;
+$thing = 4;
+$topic = 7;
+
+#Special IDs
+
+$none = -1;
+$home = -2;
+$nowhere = -3;
+
+#Unused flags
+$unusedFlag = 4;
+$unusedFlag = 6;
+$unusedFlag = 32768;
+
+#Flags
+%flags = ();
+#Cannot be seen, does not show up on WHO
+$flags{"dark"} = {"value" => 1, "name" => "Dark", "symbol" => "D"};
+
+#If player types an unmatched command, just say it instead
+$flags{"autosay"} = {"value" => 2, "name" => "Autosay", "symbol" => "a"};
+
+#Name of location visible
+$flags{"unfindable"} = {"value" => 8, "name" => "Unfindable", "symbol" => "U"};
+
+#Object is a creature and therefore behaves like one
+$flags{"creature"} = {"value" => 16, "name" => "Creature", "symbol" => "c"};
+
+#OK to link to
+$flags{"linkok"} = {"value" => 32, "name" => "Link_Ok", "symbol" => "L"};
+
+#OK to jump to with the @teleport command.
+$flags{"jumpok"} = {"value" => 64, "name" => "Jump_Ok", "symbol" => "J"};
+
+#OK for anyone to build here
+$flags{"buildok"} = {"value" => 128, "name" => "Build_Ok", "symbol" => "?"};
+
+#Chown-able (Change Owner). Player can use the @chown command to change the 
+#owner of the object. (Does not work on players. They always own themselves)
+$flags{"chownok"} = {"value" => 256, "name" => "Chown_Ok", "symbol" => "C"};
+
+#Goes home when dropped
+$flags{"sticky"} = {"value" => 512, "name" => "Sticky", "symbol" => "S"};
+
+#Part of a puzzle; a teleport or home command from this location drops all 
+#objects carried.
+$flags{"puzzle"} = {"value" => 1024, "name" => "Puzzle", "symbol" => "Z"};
+
+#If true, this location can be set home (@link) for an object by anyone.
+$flags{"abode"} = {"value" => 2048, "name" => "Abode", "symbol" => "A"};
+
+#If true for a room, this location is "grand central station": players can see 
+#things, hear people speak, etc., but arrivals and departures go unnoticed. 
+$flags{"grand"} = {"value" => 4096, "name" => "Grand", "symbol" => "G"};
+
+#If true for an object, any person can "sign" the object, appending a string of 
+#up to 60 characters to its description.
+$flags{"book"} = {"value" => 8192, "name" => "Book", "symbol" => "b"};
+
+#This player is a wizard. #1 is always a wizard.
+$flags{"wizard"} = {"value" => 16384, "name" => "Wizard", "symbol" => "W"};
+
+#This player wants to know who @emits things.
+$flags{"nospoof"} = {"value" => 65536, "name" => "Nospoof", "symbol" => "N"};
+
+#This player is allowed to build things. Set for new players if $allowBuild is 
+#set. Only a wizard can change this flag after that.
+$flags{"builder"} = {"value" => 131072, "name" => "Builder", "symbol" => "B"};
+
+#If the book flag is set, and the once flag is also set, then
+#any subsequent signature replaces all previous signatures
+#by the same individual. 
+$flags{"once"} = {"value" => 262144, "name" => "Once", "symbol" => "1"};
+
+#Set these up in a particular order so that we can say that, for instance, 
+#abbreviations of 'whisper' should beat abbreviations of 'who'.
+
+@commandsProperOrder = (
+	"\@alias", \&alias,
+	"\@test", \&test,
+	"\@debug", \&debug,
+	"\@wall", \&wall,
+	"say", \&say,
+	"emote", \&emote,
+	"\\\\", \&emote,
+	"think", \&think,
+	"\@dig", \&dig,
+	"\@doing", \&doing,
+	"\@create", \&create,
+	"\@stats", \&stats,
+	"\@rooms", \&rooms,
+	"\@gag", \&gag,
+	"\@ungag", \&ungag,
+	"look", \&look,
+	"read", \&look,
+	"examine", \&examine,
+	"inventory", \&inventory,
+	"xyzzy", \&xyzzy,
+	"drop", \&drop,
+	"get", \&get,
+	"take", \&get,
+	"home", \&home,
+	"whisper", \&whisper,
+	"who", \&who,
+	"sign", \&sign,
+	"write", \&sign,
+	"unsign", \&unsign,
+	"help", \&help,
+	"motd", \&motd,
+	"welcome", \&welcome,
+	"\@set", \&set,
+	"\@describe", \&setDescription,
+	"page", \&page,
+	"\@name", \&name,
+	"\@chown", \&chown,
+	"\@creature", \&creature,
+	"\@pcreate", \&pcreate,
+	"\@password", \&password,
+	"\@teleport", \&teleport,
+	"\@link", \&link,
+	"\@open", \&open,
+	"\@fail", \&setFail,
+	"\@ofail", \&setOfail,	
+	"\@success", \&setSuccess,
+	"\@osuccess", \&setOsuccess,
+	"\@odrop", \&setOdrop,	
+	"\@lock", \&setLock,
+	"\@boot", \&boot,
+	"\@clean", \&clean,
+	"\@find", \&find,
+	"\@rows", \&setRows,
+	"\@emit", \&emit,
+	"\@email", \&setEmail,
+	"\@topic", \&createTopic,
+	"\@join", \&joinTopic,
+	"\@leave", \&leaveTopic,
+	"last", \&last,
+	"\@tz", \&tz,
+	"\@24", \&twentyfour,
+	"\@12", \&twelve,
+	"\@sex", \&sex,
+);
+
+my($i);
+for ($i = 0; ($i < int(@commandsProperOrder)); $i += 2) {
+	$commandsProper{$commandsProperOrder[$i]} = $commandsProperOrder[$i + 1];
+}
+
+#Set the SIGPIPE handler
+
+&plumber;
+
+#Set up commands table (now in order of precedence) 
+#Make sure to empty it again if we're reloading
+%commandsTable = ( );
+
+for ($i = 0; ($i < int(@commandsProperOrder)); $i += 2) {
+	my($key) = $commandsProperOrder[$i];
+	my($val) = $commandsProperOrder[$i + 1];
+	my($j);
+	for ($j = 1; ($j <= length($key)); $j++) {
+		my($s) = substr($key, 0, $j);
+		next if ($s eq "@"); 
+		if (!exists($commandsTable{$s})) {
+			$commandsTable{$s} = $val;
+		}
+	}
+}
+
+#(re)initialization code ends here
+
+sub selectPass {
+	my($rfds, $wfds, $i);
+	$rfds = "";
+	$wfds = "";		
+	for ($i = 0; ($i <= $#activeFds); $i++) {
+		if ($activeFds[$i]{"fd"} ne $none) {
+			if ($activeFds[$i]{"protocol"} == $tinyp) {
+				my($fd) = $activeFds[$i]{"fd"};
+				vec($rfds, fileno($fd), 1) = 1;
+				vec($wfds, fileno($fd), 1) = 1 if (length($activeFds[$i]{"outbuf"})); 
+			}
+		} 
+	}
+	vec($rfds, fileno(TINYP_LISTENER), 1) = 1;
+	my $before = time;
+	# The longest timeout would be between dump intervals
+	my $timeout = $dumpinterval - ($now - $lastdump);
+	# Second longest, probably, between fd closure intervals
+	if ($fdClosureNew) {
+		# Try it right away	
+		$timeout = 0;
+	} else {
+		my $fdTimeout = $lastFdClosure + $fdClosureInterval - $now;
+		$timeout = $fdTimeout if ($fdTimeout < $timeout); 
+	}
+	$timeout = 0 if ($timeout < 0); # Reasonable timeouts only
+	select($rfds, $wfds, undef, $timeout);
+	$now = time;
+	&dump($none, "", "", "") if ($now - $lastdump >= $dumpinterval); 
+	if ($fdClosureNew || ($now - $lastFdClosure >= $fdClosureInterval)) {
+		$fdClosureNew = 0;
+		# Try to close some file descriptors we're  done with. This can take a while if they have 
+		# not flushed completely yet, so we make three-second attempts to close them, every n seconds.
+		# This is a workaround for the SO_LINGER problem.
+		$SIG{ALRM} = \&fdClosureTimeout;
+		$fdClosureTimedOut = 0;
+		alarm(3);
+		while (int(@fdClosureList)) {
+			close($fdClosureList[0]);
+			last if ($fdClosureTimedOut); # Try again later
+			shift @fdClosureList; # It worked
+		}			
+		# No more need for the alarm timer
+		alarm(0);
+		$SIG{ALRM} = undef;	
+		$lastFdClosure = time;
+	}
+	for ($i = 0; ($i <= $#activeFds); $i++) {
+		if ($activeFds[$i]{"fd"} ne $none) {
+			my($fd) = $activeFds[$i]{"fd"};
+			&readData($i, $fd) if (vec($rfds, fileno($fd), 1)); 
+			# Watch out for a close detected on the read
+			if ($activeFds[$i]{"fd"} ne $none) {
+				&writeData($i, $fd) if (vec($wfds, fileno($fd), 1)); 
+			}
+		}
+	}
+	&acceptTinyp if (vec($rfds, fileno(TINYP_LISTENER), 1)); 
+	# Idle Timeouts
+	for ($i = 0; ($i <= $#activeFds); $i++) {
+		$e = $activeFds[$i]{"id"};
+		if ($e != $none) {
+			$idlesecs = $now - $objects[$e]{"last"};
+			&closePlayer($e) if ($idlesecs > $idleTimeout); 
+		}
+	}	
+}
+
+sub closeActiveFd {
+	my($i) = @_;
+	if ($activeFds[$i]{"id"} != $none) {
+		$objects[$activeFds[$i]{"id"}]{"activeFd"} = $none;
+		$activeFds[$i]{"id"} = $none;
+	}
+	my $fd = $activeFds[$i]{"fd"};
+	if ($fd ne $none) {
+		push @fdClosureList, $fd;
+		$fdClosureNew = 1;
+	}
+	# Make sure the next person doesn't get old buffer data!
+	$activeFds[$i] = { };
+	$activeFds[$i]{"fd"} = $none;
+	$activeFds[$i]{"id"} = $none;
+}
+
+sub input {
+	my($aindex, $input) = @_;
+	if ($activeFds[$aindex]{"id"} ne $none) {
+		&command($activeFds[$aindex]{"id"}, $input);
+	} else {
+		$input =~ s/\s+/ /g;
+		$input =~ s/^ //g;
+		$input =~ s/ $//g;
+		my($verb, $object, $pwd) = split(/ /, $input);	
+		return if ($verb eq ""); 
+		if ($verb =~ /^quit$/i) {
+			closeActiveFd($aindex);
+			return;
+		}
+		if ($verb =~ /^con/) {
+			my $n = $object;
+			$n =~ tr/A-Z/a-z/;
+			if (!exists($playerIds{$n})) {
+				&tellActiveFd($aindex, "Login Failed");
+				&tellActiveFd($aindex, "That player does not exist.");
+				return;
+			} else {
+				my $id = $playerIds{$n};
+				if (md5_base64($pwd) ne $objects[$id]{"password"}) {
+					&tellActiveFd($aindex, "Login Failed");
+					&tellActiveFd($aindex, "That player has a different password.");
+					return;
+				}
+				&tellActiveFd($aindex, "Login Succeeded");
+				closePlayer($id) if ($objects[$id]{"activeFd"} != $none); 
+				$activeFds[$aindex]{"id"} = $id;
+				&login($id, $aindex);
+			}
+			return;
+		}
+		if ($verb =~ /^cre/) {
+			if (substr($object, 0, 1) eq "#") {
+				&tellActiveFd($aindex, "Sorry, names cannot begin with #.");
+				return;
+			}
+			$_ = $object;
+			if (/\s/) {
+				&tellActiveFd($aindex, "Sorry, names cannot contain spaces.");
+				return;
+			}
+			my $n = $object;
+			$n =~ tr/A-Z/a-z/;
+			if (exists($playerIds{$n})) {
+				&tellActiveFd($aindex, "Sorry, that name is taken.");
+				return;
+			}
+			my $id = &addObject(0, $object, $player);
+			$playerIds{$n} = $id;
+			$objects[$id]{"owner"} = $id;
+			&addContents(0, $id);
+			$objects[$id]{"password"} = md5_base64($pwd);
+			if ($allowBuild) {
+				$objects[$id]{"flags"} = $flags{"builder"}{"value"};
+			} else {
+				$objects[$id]{"flags"} = 0;
+			}
+			&tellActiveFd($aindex, "Player creation succeeded.");
+			$activeFds[$aindex]{"id"} = $id;
+			&login($id, $aindex);
+			return;
+		} 
+		&tellActiveFd($aindex, "Try: connect <name> <password> (or quit)");
+	}
+}
+
+sub closePlayer {
+	my($id) = @_;
+	my($i);
+	for ($i = 0; ($i <= $#activeFds); $i++) {
+		if (($activeFds[$i]{"fd"} ne $none) &&
+			($activeFds[$i]{"id"} == $id)) 
+		{
+			$activeFds[$i]{"id"} = $none;
+			&closeActiveFd($i);
+			last;
+		}
+	}
+	$objects[$id]{"activeFd"} = $none;
+	if (!($objects[$objects[$id]{"location"}]{"flags"} & $flags{"grand"}{"value"})) {
+		&tellRoom($objects[$id]{"location"}, $none, $objects[$id]{"name"} . " has disconnected.");
+	}
+	$objects[$id]{"off"} = $now;
+}
+
+sub acceptTinyp {
+	my($fd) = $fdBase . $fdNum;
+	$fdNum++;
+	my $paddr = accept($fd, TINYP_LISTENER);
+	if ($paddr) {
+	#if (accept($fd, TINYP_LISTENER)) {
+		my($i, $found, $port, $inaddr, $ip, $site);
+		$found = 0;
+		($port, $inaddr) = sockaddr_in($paddr);
+		$ip = inet_ntoa($inaddr);
+		$site = gethostbyaddr($inaddr, AF_INET);
+		for ($i = 0; ($i <= $#activeFds); $i++) {
+			if ($activeFds[$i]{"fd"} eq $none) {
+				$activeFds[$i]{"protocol"} = $tinyp;
+				$activeFds[$i]{"fd"} = $fd;
+				$activeFds[$i]{"id"} = $none;
+				$activeFds[$i]{"ip"} = $ip;
+				$activeFds[$i]{"site"} = $site;
+				&sendActiveFdFile($i, $welcomeFile);
+				$found = 1;
+				last;
+			}
+		}
+		if (!$found) {
+			my($aindex) = $#activeFds + 1;
+			$activeFds[$aindex]{"protocol"} = $tinyp;
+			$activeFds[$aindex]{"fd"} = $fd;
+			$activeFds[$aindex]{"id"} = $none;
+			$activeFds[$aindex]{"ip"} = $ip;
+			$activeFds[$aindex]{"site"} = $site;
+			&sendActiveFdFile($aindex, $welcomeFile);
+		}
+		# Stop (ma)lingering behavior
+		setsockopt($fd, SOL_SOCKET, SO_LINGER, 0);
+		# Set non-blocking I/O 
+		fcntl($fd, F_SETFL, O_NONBLOCK);
+	}
+}
+
+sub command {
+	my($me, $text) = @_;	
+	my($id);
+	$objects[$me]{"lastPing"} = $now;
+	$_ = $text;
+	# Clean up whitespace. 
+	s/\s/ /g;
+	s/^ //g;
+	s/ $//g;
+	$text = $_;
+	return if ($text eq ""); 
+	if ($text =~ /^quit$/i) {
+		&closePlayer($me);
+		return;
+	}
+	$objects[$me]{"last"} = $now;
+	if ($commandLogging) {
+		print CLOG $me, ":", $text, "\n";
+		&flush(CLOG);
+	}
+	if (substr($text, 0, 1) eq "\"") {
+		&say($me, substr($text, 1), "", "");
+		return;
+	}
+	if (substr($text, 0, 1) eq ":") {
+		&emote($me, substr($text, 1), "", "");
+		return;
+	}
+	if (substr($text, 0, 1) eq "'") {
+		$text =~ s/^\'(\S+)\s*//;
+		&say($me, $text, "", "", $1);
+		return;
+	}
+	if (substr($text, 0, 2) eq "..") {
+		&tellPlayer($me, "Sorry, support for .. has been removed. Please use ' instead of .. as this makes the .name whisper shortcut safe to use.");
+	}	 
+	if (substr($text, 0, 1) eq ".") {
+		$text =~ s/^\.(\S+)\s+//;
+		&whisper($me, "", $1, $text);
+		return;
+	}
+	if ($text =~ /^,(\S+)\s+(.*)$/) {
+		&topic($me, "", $1, $2, 0);
+		return;
+	}
+	if ($text =~ /^;(\S+)\s+(.*)$/) {
+		#&topic($me, "", $1, $2, 1);
+		&emote($me, substr($text, 1), "semi", "");
+		return;
+	}
+	if (substr($text, 0, 1) eq "%") {
+		&force_creature($me, substr($text, 1), "", "");
+		return;
+	}
+
+	#
+	# Consider exits from this room.
+	#
+
+	if (substr($text, 0, 1) ne "@") {
+		$id = &findContents($objects[$me]{"location"}, $text);
+		if ($id != $none) {
+			if ($objects[$id]{"type"} != $exit) {
+				&fail($me, $id, "You can't go that way.", "");
+				return;
+			}	
+			if (!&testLock($me, $id)) {
+				&fail($me, $id, "You can't go that way.", "");
+				return;
+			}
+			if ($objects[$id]{"action"} == $nowhere) {
+				&success($me, $id, "", $objects[$me]{"name"} . " has left.");
+				return;
+			}
+			&removeContents($objects[$me]{"location"}, $me);
+			if (!($objects[$objects[$me]{"location"}]{"flags"} & $flags{"grand"}{"value"})) {
+				&success($me, $id, "", $objects[$me]{"name"} . " has left.");
+			}
+			if ($objects[$id]{"action"} == $home) {
+				&sendHome($me);
+				return;
+			}		
+			if (!($objects[$objects[$id]{"action"}]{"flags"} & $flags{"grand"}{"value"})) {
+				if ($objects[$id]{"odrop"} ne "") {
+					&tellRoom($objects[$id]{"action"}, $none,
+						$objects[$me]{"name"} . " " .
+						&substitute($me, $objects[$id]{"odrop"}));
+				} else {
+					&tellRoom($objects[$id]{"action"}, $none,
+						$objects[$me]{"name"} . " has arrived.");
+				}
+			}
+			&addContents($objects[$id]{"action"}, $me);
+			&describe($me, $objects[$me]{"location"}, 0);	
+			return;
+		}
+	}	
+
+	#Split into command and argument. 
+
+	my($c, $arg) = split(/ /, $text, 2);
+	
+	$arg = &canonicalizeWord($me, $arg);
+
+	# Now commands with an = sign.
+	
+	# Common parsing
+
+	my($arg1, $arg2) = split(/=/, $arg, 2);
+	$arg1 = &canonicalizeWord($me, $arg1);
+	$arg2 = &canonicalizeWord($me, $arg2);
+
+	# Commands that are not in the normal table
+
+	$c =~ tr/A-Z/a-z/;
+
+	if ($c eq "\@recycle") {
+		&recycle($me, $arg, $arg1, $arg2);
+		return;
+	}
+	if ($c eq "\@purge") {
+		&purge($me, $arg, $arg1, $arg2);
+		return;
+	}
+	if ($c eq "\@toad") {
+		&toad($me, $arg, $arg1, $arg2);
+		return;
+	}
+	if ($c eq "\@shutdown") {
+		&shutdown($me, $arg, $arg1, $arg2);
+		return;
+	}
+	if ($c eq "\@reload") {
+		&reload($me, $arg, $arg1, $arg2);
+		return;
+	}
+	if ($c eq "\@dump") {
+		&dump($me, $arg, $arg1, $arg2);
+		return;
+	}
+
+	# If there is an =, then look for an abbreviated command
+	if (exists($commandsTable{$c})) {
+		&{$commandsTable{$c}}($me, $arg, $arg1, $arg2);		
+		return;
+	} else {
+		&tellPlayer($me, "Huh?  (Type \"help\" for help.)");
+	}	
+}
+
+sub dig {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if (!&builderTest($me)) {
+		&tellPlayer($me, "Sorry, only an authorized builder can do that.");
+		return;
+	}	
+	&addObject($me, $arg, $room);
+}
+
+sub doing {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my $do = substr($arg, 0, 39);
+	$objects[$me]{"doing"} = $do;
+	my $msg = "Doing set.";
+	if (length $arg > 39) {
+		my $diff = length $arg - 39;
+		$msg .= " $diff characters lost.";
+	}
+	&tellPlayer($me, $msg);
+}
+
+sub creature {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&tellPlayer($me, "Syntax: \@creature object") if (($arg1 eq "") || ($arg2 eq "")); 
+	if (substr($arg1, 0, 1) eq "#") {
+		$id = substr($arg1, 1);
+		$id = &idBounds($id);
+	} else {
+		$id = &findContents($objects[$me]{"location"}, $arg1);
+		$id = &findContents($me, $arg1) if ($id == $none); 
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "I don't see that object here.");
+		return;
+	}								
+	if ((!&wizardTest($me)) && ($objects[$id]{"owner"} != $me)) {
+		&tellPlayer($me, "You don't own that.");
+		return;
+	}
+	my $name = $objects[$id]{"name"};
+	$name =~ tr/A-Z/a-z/;
+	if (exists($playerIds{$name})) {
+		&tellPlayer($me, "That is not a good name for your creature.");
+		return;
+	}
+	$playerIds{$name} = $id;
+	$objects[$id]{"flags"} &= $flags{"creature"}{"value"};	
+	&tellPlayer($me, "Your creature is activated.");
+	&tellPlayer($id, "Testing your creature.");
+}
+
+sub force_creature {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if ($arg !~ /\s+/) {
+		&tellPlayer($me, "Usage: %<name> <command>");
+		return;
+	}
+	my($creature, $command) = split(" ", $arg, 2);
+	$creature =~ tr/A-Z/a-z/;
+	if (!exists($playerIds{$creature})) {
+		&tellPlayer($me, "Sorry, that is not a valid creature.");
+		return;
+	} elsif ($objects[$playerIds{$creature}]{"owner"} != $me) {
+		&tellPlayer($me, "Permission denied.");
+		return;
+	}
+	my $creatureID = $playerIds{$creature};
+	&command($creatureID, $command);
+}
+
+sub twentyfour {
+	my($me, $arg, $arg1, $arg2) = @_;
+	$objects[$me]{"24hour"} = 1;
+	&tellPlayer($me, "24-hour time display set.");
+}
+
+sub twelve {
+	my($me, $arg, $arg1, $arg2) = @_;
+	$objects[$me]{"24hour"} = 0;
+	&tellPlayer($me, "12-hour time display set.");
+}
+
+sub reload {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if ($me != $none) {
+		if (!&wizardTest($me)) {
+			&tellPlayer($me, "Sorry, only a wizard can do that.");
+			return;
+		}
+	}
+	&dump($me, $arg, $arg1, $arg2);
+	$reloadFlag = 1;
+}
+
+sub tz {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if ($arg eq "") {
+		&tellPlayer($me, "Usage: [-]HH:MM (optional minus sign, " .
+			"followed by an offset in hours and minutes)");
+		return;
+	}
+	if ($arg =~ /^([-+]?)(\d\d?):(\d\d)$/) {
+		my($sign, $hours, $mins) = ($1, $2, $3);
+		my($tz) = $hours * 60 + $mins;
+		$tz = -$tz if ($sign eq "-"); 
+		$objects[$me]{"tz"} = $tz;
+		&tellPlayer($me, "Time zone updated.");
+	} else {
+		&tellPlayer($me, "Usage: [-]HH:MM (optional minus sign, " .
+			"followed by an offset in hours and minutes)");
+	}
+}
+
+sub create {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($id);
+	if (!&builderTest($me)) {
+		&tellPlayer($me, "Sorry, only an authorized builder can do that.");
+		return;
+	}	
+	if ($arg =~ /^\s*$/) {
+		&tellPlayer($me, "Syntax: \@create nameofthing");
+		return;
+	}
+	$id = &addObject($me, $arg, $thing); 
+	&addContents($me, $id);
+	$objects[$id]{"home"} = $objects[$me]{"home"};
+}
+
+sub createTopic {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($id);
+	if (!&builderTest($me)) {
+		&tellPlayer($me, "Sorry, only an authorized builder can do that.");
+		return;
+	}	
+	if ($arg =~ /^\s*$/) {
+		&tellPlayer($me, "Syntax: \@topic topicname (no commas or spaces allowed)");
+		return;
+	}
+	if (length($arg2)) {
+		&tellPlayer($me, "Syntax: \@topic topicname (no commas or spaces allowed)");
+		return;
+	}
+	if ($arg =~ /[ ,]/) { 
+		&tellPlayer($me, "Syntax: \@topic topicname no commas or spaces allowed)");
+		return;
+	}
+	$id = &findTopic($me, $arg, 1);
+	&tellPlayer($me, "Topic $arg raised. Type ,$arg blah blah... " .
+		"to talk about it. You can 'get' the topic if you want " .
+		"to carry it off and discuss it elsewhere.");
+	$objects[$id]{"lastuse"} = time;
+	&topic($me, "", $objects[$id]{"name"}, $objects[$id]{"me"} .  "brings up the topic", 1);
+}
+
+sub findTopic {
+	my($me, $arg, $exact) = @_;
+	my($id);
+	#1. Exact match for the topic, present in the room already.
+	$id = &findContents($objects[$me]{"location"}, $arg, $topic);
+	my($pat) = quotemeta($arg);
+	return $id if (($id != $none) && ($objects[$id]{"name"} =~ /^$pat$/i)); 
+	#2. Exact match for the topic, present in the user's inventory.
+	$id = &findContents($me, $arg, $topic);
+	if (($id != $none) && ($objects[$id]{"name"} =~ /^$pat$/i)) {
+		&removeContents($me, $id);
+		$objects[$id]{"location"} = $objects[$me]{"location"};
+		&addContents($objects[$me]{"location"}, $id);
+		&tellPlayer($objects[$id]{"name"} . " dropped.");
+		return $id;
+	}
+	if (!$exact) {
+		#3. Inexact match for the topic, present in the room already.
+		$id = &findContents($me, $arg, $topic);
+		return $id if ($id != $none); 
+		#4. Inexact match for the topic, present in the user's inventory.
+		$id = &findContents($me, $arg, $topic);
+		if ($id != $none) {
+			&removeContents($me, $id);
+			$objects[$id]{"location"} = $objects[$me]{"location"};
+			&addContents($objects[$me]{"location"}, $id);
+			&tellPlayer($objects[$id]{"name"} . " dropped.");
+			return $id;
+		}
+	}
+	#5. Must be created.
+	$id = &addObject($me, $arg, $topic); 
+	&addContents($objects[$me]{"location"}, $id);
+	$objects[$id]{"home"} = $me;
+	# By default, it is locked to its creator. 
+	$objects[$id]{"lock"} = "#$me";
+	return $id;
+}
+
+sub look {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&lookBody($me, $arg, $arg1, $arg2, 0);
+}
+
+sub examine {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&lookBody($me, $arg, $arg1, $arg2, 1);
+}
+
+sub find {
+	my($me, $arg, $arg1, $arg2, $details) = @_;
+	my($i, $id, $len1, $len2, $w, $found, $name);
+	if ($arg eq "") {
+		&tellPlayer($me, "Syntax: \@find name");
+		return;
+	}
+	$arg =~ tr/A-Z/a-z/;
+	$found = 0;
+	$len1 = length($arg);
+	$w = &wizardTest($me);
+	for ($i = 0; ($i <= $#objects); $i++) {
+		if ($w || ($objects[$i]{"owner"} == $me)) {
+			($name = $objects[$i]{"name"}) =~ tr/A-Z/a-z/; 
+			$len2 = length($name);
+			if ($len1 <= $len2) {
+				if (substr($name, 0, $len1) eq $arg) {
+					&tellPlayer($me, "#" . $i . ": " .  $objects[$i]{"name"});
+					$found = 1;
+				}
+			}
+		}
+	}
+	&tellPlayer($me, "Not found.") if (!$found); 
+}
+
+sub stats {
+	my($me, $arg, $arg1, $arg2, $details) = @_;
+	my($i, $j, @typeCounts, @flagCounts, $open, $owner, $total); 
+	$owner = $none;
+	if ($arg ne "") {
+		if (substr($arg, 0, 1) ne "#") {
+			my($n);
+			$n = $arg1;
+			$n =~ tr/A-Z/a-z/;
+			if (!exists($playerIds{$n})) {
+				&tellPlayer($me, "There is no such player.");
+				return;
+			}
+			$owner = $playerIds{$n};
+		} else {
+			$owner = substr($arg, 1);
+			$owner = &idBounds($owner);
+		}
+		if ($owner == $none) {
+			&tellPlayer($me, "That is not a valid player.");
+			return;
+		}
+		if ($objects[$owner]{"type"} != $player) {
+			&tellPlayer($me, "That is not a valid player.");
+			return;
+		}	
+	}
+	for ($i = 0; ($i <= $#objects); $i++) {
+		if ($owner != $none) {
+			next if ($objects[$i]{"owner"} != $owner); 
+		}
+		if ($objects[$i]{"type"} == $none) {
+			$open++;
+		} else {
+			$typeCounts[$objects[$i]{"type"}]++;
+		}		
+		#for ($j = 0; ($j <= $#flagNames); $j++) {
+		#	$flagCounts[$j]++ if ($objects[$i]{"flags"} & (1 << $j)); 
+		#}
+		$total++;
+	}
+	if ($owner == $none) {
+		&tellPlayer($me, "Overall Statistics");
+	} else {
+		&tellPlayer($me, "Statistics for " . $objects[$owner]{"name"});
+	}	
+	&tellPlayer($me, "Total objects:           " . int($total));
+	&tellPlayer($me, "Total things:            " .  int($typeCounts[$thing]));
+	&tellPlayer($me, "Total exits:             " .  int($typeCounts[$exit]));
+	&tellPlayer($me, "Total rooms:             " .  int($typeCounts[$room]));
+	&tellPlayer($me, "Total players:           " .  int($typeCounts[$player]));
+	&tellPlayer($me, "Total topics:            " .  int($typeCounts[$topic]));
+	&tellPlayer($me, "Total unused objects:    " . $open) if ($owner == $none); 
+	#for ($i = 0; ($i <= $#flagNames); $i++) {
+	#	if ($flagCounts[$i]) {
+	#		&tellPlayer($me, sprintf("%-25.25s%d", "Total " . 
+	#			$flagNames[$i] . " objects:", $flagCounts[$i]));	
+	#	}
+	#}
+}
+
+sub rooms {
+	my($me, $arg, $arg1, $arg2, $details) = @_;
+	my($owner, $total, $rooms); 
+	$owner = $none;
+	if ($arg ne "") {
+		if (substr($arg, 0, 1) ne "#") {
+			my($n);
+			$n = $arg1;
+			$n =~ tr/A-Z/a-z/;
+			if (!exists($playerIds{$n})) {
+				&tellPlayer($me, "There is no such player.");
+				return;
+			}
+			$owner = $playerIds{$n};
+		} else {
+			$owner = substr($arg, 1);
+			$owner = &idBounds($owner);
+		}
+		if ($owner == $none) {
+			&tellPlayer($me, "That is not a valid player.");
+			return;
+		}
+		if ($objects[$owner]{"type"} != $player) {
+			&tellPlayer($me, "That is not a valid player.");
+			return;
+		}	
+	}
+	$owner = $me if (($owner == $none) && (!&wizardTest($me))); 
+	if (($owner != $me) && (!&wizardTest($me))) {
+		&tellPlayer($me, "Only a wizard can list rooms belonging to other players.");
+		return;
+	}	
+	$total = 0;
+	for ($i = 0; ($i <= $#objects); $i++) {
+		if ($owner != $none) {
+			next if ($objects[$i]{"owner"} != $owner); 
+		}
+		if ($objects[$i]{"type"} == $room) {
+			$rooms .= ", " if ($rooms ne ""); 
+			$rooms .= "#" . $i;
+			$total++;
+			if (!($total % 100)) {
+				# Flush for extreme cases
+				&tellPlayer($me, $rooms);
+				$rooms = "";
+			}	
+		}		
+	}
+	&tellPlayer($me, $rooms) if ($total % 100); 
+	if ($owner == $none) {
+		&tellPlayer($me, "Total rooms: ". $total);
+	} else {
+		&tellPlayer($me, "Rooms belonging to " . 
+			$objects[$owner]{"name"} . ": " . $total);
+	}	
+}
+
+sub lookBody {
+	my($me, $arg, $arg1, $arg2, $details) = @_;
+	my($id);
+	if (($arg eq "") || ($arg eq ("#" . $objects[$me]{"location"}))) {
+		&describe($me, $objects[$me]{"location"}, $details);
+	} else {
+		$id = &findContents($objects[$me]{"location"}, $arg);
+		$id = &findContents($me, $arg) if ($id == $none); 
+		if ($id == $none) {
+			if ($details) {
+				if (substr($arg, 0, 1) eq "#") {
+					$id = int(substr($arg, 1));
+					$id = &idBounds($id);
+				}
+			} 
+		}
+		if (($id == $none) || ($objects[$id]{"type"} == $none)) {
+			&tellPlayer($me, "I don't see that here.");
+			return;
+		}
+		&describe($me, $id, $details);
+	}
+}
+
+sub toad {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($id, $arg2id);
+	if ($arg1 eq "") {
+		&tellPlayer($me, "Usage: \@toad player");
+		return;
+	}
+	if (substr($arg1, 0, 1) eq "#") {
+		$id = int(substr($arg1, 1));
+		$id = &idBounds($id);
+		if ($id == $none) {
+			&tellPlayer($me, "There is no such player.");
+			return;
+		}
+	} else {
+		my($n);
+		if ($arg1 =~ /^\*(.*)$/) {
+			$arg1 = $1;
+		}
+		$n = $arg1;
+		$n =~ tr/A-Z/a-z/;
+		if (!exists($playerIds{$n})) {
+			&tellPlayer($me, "There is no such player.");
+			return;
+		}
+		$id = $playerIds{$n};
+	}
+	if ($arg2 eq "") {
+		$arg2id = $none;
+	} else {
+		if (substr($arg2, 0, 1) eq "#") {
+			$arg2id = int(substr($arg2, 1));
+			$arg2id = &idBounds($arg2id);
+			if ($arg2id == $none) {
+				&tellPlayer($me, "There is no such player.");
+				return;
+			}
+		} else {
+			my($n);
+			if ($arg2 =~ /^\*(.*)$/) {
+				$arg2 = $1;
+			}
+			$n = $arg2;
+			$n =~ tr/A-Z/a-z/;
+			if (!exists($playerIds{$n})) {
+				&tellPlayer($me, "There is no such player.");
+				return;
+			}
+			$arg2id = $playerIds{$n};		
+		}
+		if ($arg2id == $none) {
+			&tellPlayer($me, "I don't see that here.");
+		}
+	}
+	if ($arg2id != $none) {
+		if ($objects[$arg2id]{"type"} != $player) {
+			&tellPlayer($me, "#" . $arg2id . " is not a player.");
+			return;
+		} 
+	}
+	if (!&wizardTest($me)) {
+		&tellPlayer($me, "Only a wizard can do that!");
+		return;
+	}	
+	if ($objects[$id]{"type"} != $player) {
+		&tellPlayer($me, "Not a player. \@toad is used to turn players into slimy toads (objects). \@recycle is used to eliminate objects.");
+	}
+	if ($id == $arg2id) {
+		&tellPlayer($me, "You can't give a toad's possessions to the toad itself.");
+		return;
+	}
+	if (($id == 0) || ($id == 1)) {
+		&tellPlayer($me, "Objects #0 and #1 are indestructible.");
+		return;
+	}
+
+	&dropAll($id);
+
+	&closePlayer($id) if ($objects[$id]{"activeFd"} != $none); 
+	my($name) = $objects[$id]{"name"};
+	$name =~ tr/A-Z/a-z/;
+	undef($playerIds{$name});
+
+	$objects[$id]{"name"} = "A slimy toad named " . $objects[$id]{"name"};	
+	$objects[$id]{"type"} = $thing;
+	#Find objects belonging to this player and give them to the specified player, or recycle them if no
+	#player is specified.
+
+	my($i);
+	for ($i = 0; ($i <= $#objects); $i++) {
+		if (($i != $id) && ($objects[$i]{"owner"} == $id)) {
+			if ($arg2id == $none) {
+				&recycle($me, "#" . $i, "", "");
+			} else {
+				$objects[$i]{"owner"} = $arg2id;
+			}
+		}
+	}		
+	&tellPlayer($me, "Toaded.");	
+	&updateApachePasswords;
+}
+
+sub recycle {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($id);
+	my(@list, $e);
+	if ($arg eq "") {
+		&tellPlayer($me, "Usage: \@recycle thing");
+		return;
+	}
+	$id = &findContents($objects[$me]{"location"}, $arg);
+	$id = &findContents($me, $arg) if ($id == $none); 
+	if ($id == $none) {
+		if (substr($arg, 0, 1) eq "#") {
+			$id = int(substr($arg, 1));
+			$id = &idBounds($id);
+		}
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "I don't see that here.");
+		return;
+	}
+	&recycleById($me, $id, 0);
+}
+
+sub recycleById {
+	my($me, $id, $quiet) = @_;
+	if ($objects[$id]{"owner"} != $me) {
+		if (!&wizardTest($me)) {
+			&tellPlayer($me, "You don't own that!") if (!$quiet); 
+			return;
+		}
+	}	
+	if ($objects[$id]{"type"} == $player) 
+	{
+		&tellPlayer($me, "You must \@toad players before recycling them.") if (!$quiet); 
+		return;
+	}
+	if (($id == 0) || ($id == 1)) {
+		&tellPlayer($me, "Objects #0 and #1 are indestructible.") if (!$quiet); 
+		return;
+	}
+	#Remove it from its location
+		
+	&removeContents($objects[$id]{"location"}, $id);
+	#Find all entrances and link them to the void	
+	my($i);
+	for ($i = 0; ($i <= $#objects); $i++) {
+		$objects[$i]{"action"} = 0 if ($objects[$i]{"action"} == $id); 
+	}
+
+	#Reset the flags to keep anything funny like a puzzle
+	#flag from interfering with the removal of the contents
+
+	$objects[$id]{"flags"} = 0;
+
+	#Send the contents home. If they live here, 
+	#recycle them too, unless they are players.
+	#If they are players, set their homes to room 0
+	#and send them home.
+
+	@list = split(/,/, $objects[$id]{"contents"});
+	foreach $e (@list) {
+		if ($objects[$e]{"home"} == $id) {
+			if ($objects[$e]{"type"} == $player) {
+				$objects[$e]{"home"} = 0;
+			} else {
+				&recycle($me, "#" . $e, "", "");
+				next;
+			}
+		}
+		&sendHome($e);
+	}
+
+	&tellPlayer($me, $objects[$id]{"name"} . " recycled.") if (!$quiet); 
+	#Mark it unused
+	$objects[$id] = { };
+	# I promise I won't introduce more of this stupidity
+	$objects[$id]{"type"} = $none;
+	$objects[$id]{"activeFd"} = $none;
+}
+
+sub inventory {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&describe($me, $me, 1);
+}
+
+sub drop {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($id);
+	if ($arg eq "all") {
+		&dropAll($me);
+		return;
+	}
+	$id = &findContents($me, $arg);
+	if ($id == $none) {
+		&tellPlayer($me, "You are not carrying that.");
+	} else {
+		if ($objects[$id]{"type"} == $topic) {
+			&createTopic($me, $arg, $arg1, $arg2);
+			return;
+		}
+		&removeContents($me, $id);
+		&tellPlayer($me, "You dropped " . $objects[$id]{"name"} . ".");
+		if ($objects[$id]{"flags"} & $flags{"sticky"}{"value"}) {
+			&addContents($objects[$id]{"home"}, $id);
+		} else {
+			&addContents($objects[$me]{"location"}, $id);
+		}
+		if ($objects[$id]{"odrop"} ne "") {
+			&tellRoom($objects[$me]{"location"}, $me, $objects[$me]{"name"} . " " .  &substitute($me, $objects[$id]{"odrop"}));
+		} else {
+			&tellRoom($objects[$me]{"location"}, $me, $objects[$me]{"name"} . " dropped " .  $objects[$id]{"name"} . "."); 
+		}
+	}
+}
+
+sub get {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($id);
+	if ($arg eq "") {
+		&tellPlayer($me, "Syntax: get thing");
+		return;
+	}
+	if ($arg eq "me") {
+		$id = $me;
+	} else {
+		$id = &findContents($objects[$me]{"location"}, $arg);
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "I don't see that here.");
+		return;
+	} else {
+		if ($id == $me) {
+			&tellPlayer($me, "How autoerotic.");
+			return;
+		}
+		if ((!&testLock($me, $id)) ||
+			(($objects[$id]{"type"} != $thing) && ($objects[$id]{"type"} != $topic) && ($objects[$id]{"type"} != $exit))) {
+			&fail($me, $id, "You can't pick that up!", "");
+			return;
+		}
+		if ($objects[$id]{"type"} == $exit) {
+			if ((!&wizardTest($me)) && ($objects[$id]{"owner"} != $me)) {
+				&tellPlayer($me, "You don't own that.");
+				return;
+			}
+		}
+		&removeContents($objects[$me]{"location"}, $id);
+		&addContents($me, $id);
+		&tellRoom($objects[$me]{"location"}, $me, $objects[$me]{"name"} . " got " .  $objects[$id]{"name"} . "."); 
+		&success($me, $id, "You picked up " . $objects[$id]{"name"} . ".", "");
+	}
+}
+
+sub home {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&sendHome($me);
+}
+
+sub tellWizards {
+	my($msg) = @_;
+	my($i);
+	for ($i = 0; ($i <= $#activeFds); $i++) {
+		my($e) = $activeFds[$i]{"id"};
+		if ($e != $none) {
+			&tellPlayer($e, $msg) if (&wizardTest($e)); 
+		}
+	}	
+}
+
+sub who {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($e, $hash, $i, $idlesecs, $idle, $onsecs, $on, $whostr);
+	if (&wizardTest($me)) {
+		&tellPlayer($me, sprintf("%-14.14s%-9.9s%-9.9s%-9.9s%-38s", "Player Name", "  On For", " Idle", "Room", "Site"));
+		for ($i = $#activeFds; $i >= 0; $i--) {
+			$e = $activeFds[$i]{"id"};
+			if ($e != $none) {
+				$idlesecs = $now - $objects[$e]{"last"};
+				$idle = &timeFormat($idlesecs);
+				$onsecs = $now - $objects[$e]{"on"};
+				$on = &timeFormat($onsecs);
+				my $name = sprintf("%-14.14s", $objects[$e]{"name"});
+				my $loc = "#" . $objects[$e]{"location"};
+				my $site = ($objects[$e]{"site"} eq "") ? $objects[$e]{"ip"} : $objects[$e]{"site"};
+				&tellPlayer($me, sprintf("%-14.14s%-9.9s%-9.9s%-9.9s%-38s", $name, $on, $idle, "  $loc", $site));
+			}
+		}	
+	} else {
+		&tellPlayer($me, sprintf("%-14.14s%-9.9s%-9.9s%-46s", "User", "On", "Idle", "Doing"));
+		for ($i = $#activeFds; $i >= 0; $i--) {
+			$e = $activeFds[$i]{"id"};
+			if ($e != $none) {
+				$idlesecs = $now - $objects[$e]{"last"};
+				$idle = &timeFormat($idlesecs);
+				$onsecs = $now - $objects[$e]{"on"};
+				$on = &timeFormat($onsecs);
+				my $name = sprintf("%-14.14s", $objects[$e]{"name"});
+				&tellPlayer($me, sprintf("%s%-9.9s%-9.9s%-46s", $name, $on, $idle, $objects[$e]{"doing"}));
+			}
+		}	
+	}
+	&tellPlayer($me, "Uptime: " . &timeFormat($now - $initialized));
+}
+
+sub last {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($id);
+	if ($arg1 eq "") {
+		&tellPlayer($me, "Usage: last player");
+		return;
+	}
+	if (substr($arg1, 0, 1) eq "#") {
+		$id = int(substr($arg1, 1));
+		$id = &idBounds($id);
+		if ($id == $none) {
+			&tellPlayer($me, "There is no such player.");
+			return;
+		}
+	} else {
+		my($n);
+		if ($arg1 =~ /^\*(.*)$/) {
+			$arg1 = $1;
+		}
+		$n = $arg1;
+		$n =~ tr/A-Z/a-z/;
+		if (!exists($playerIds{$n})) {
+			&tellPlayer($me, "There is no such player.");
+			return;
+		}
+		$id = $playerIds{$n};
+	}
+	if ($objects[$me]{"tz"} eq "") {
+		&tellPlayer($me, "You have not set your time zone. Assuming GMT. Use \@tz to change this.");
+	}
+	my($on, $off) = ($objects[$id]{"on"}, $objects[$id]{"off"});
+	if ($on eq "") {
+		&tellPlayer($me, $objects[$id]{"name"} .  " has never logged in.");
+		return;
+	}
+	my($msg) = $objects[$id]{"name"} . " last logged in: " . &timeAndDateFormat($me, $objects[$id]{"on"});
+	&tellPlayer($me, $msg);
+	if ($objects[$id]{"activeFd"} != $none) {
+		&tellPlayer($me, $objects[$id]{"name"} . " is still logged in.");
+	} elsif ($off eq "") {
+		return;
+	} elsif ($off > $on) {
+		&tellPlayer($me, $objects[$id]{"name"} . " last logged out: " . &timeAndDateFormat($me, $objects[$id]{"off"}));
+	} else {
+		# If $on is less than $off, the mud was stopped
+		# before they logged off, so logoff time is indeterminate.
+	}
+}
+
+sub timeAndDateFormat {
+	my($me, $when) = @_;
+	my($adj) = $when + $objects[$me]{"tz"} * 60;
+	my(@timeFields) = gmtime($adj);
+	my($month, $day, $year, $hour, $min, $sec);
+	$month = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec") [$timeFields[4]];
+	$day = $timeFields[3];
+	$year = $timeFields[5] + 1900;
+	$hour = $timeFields[2];
+	$min = $timeFields[1];
+	$sec = $timeFields[0];
+	my($suffix);
+	if ($objects[$me]{"24hour"}) {
+		$suffix = "";
+	} else {
+		if (($hour == 12) && ($min == 0)) {
+			$suffix = " noon";
+		} elsif (($hour == 0) && ($min == 0)) {
+			$hour = 12;
+			$suffix = " midnight";
+		} elsif ($hour > 12) {
+			$hour -= 12;
+			$suffix = " pm";
+		} elsif ($hour == 12) {
+			$suffix = " pm";
+		} elsif ($hour == 0) {
+			$hour = 12;
+			$suffix = " am";
+		} else {
+			$suffix = " am";
+		}
+	}			
+	if ($objects[$me]{"24hour"}) {
+		$hour = sprintf("%02d", $hour);
+	} else {
+		$hour = sprintf("%2d", $hour);
+	}
+	return sprintf("%s %02d %04d %02d:%02d:%02d$suffix", $month, $day, $year, $hour, $min, $sec);
+}
+
+sub shutdown {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if (!&wizardTest($me)) {
+		&tellPlayer($me, "Sorry, only a wizard can do that.");
+		return;
+	}
+	&dump($me, $arg, $arg1, $arg2);
+	my($i);
+	close(LISTENER);
+	for ($i = 0; ($i <= $#activeFds); $i++) {
+		&sendHome($activeFds[$i]{"id"}) if ($activeFds[$i]{"id"} != $none); 
+		&closeActiveFd($i);
+	}
+	close(CLOG) if ($commandLogging);
+	exit 0;
+}
+
+
+sub dump {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if ($me != $none) {
+		if (!&wizardTest($me)) {
+			&tellPlayer($me, "Sorry, only a wizard can do that.");
+			return;
+		}
+	}
+	&tellPlayer($me, "Dumping the database...") if ($me != $none); 
+	if (!CORE::open(OUT, ">$dbFile.tmp")) {
+		&tellPlayer($me, "Unable to write to $dbFile.tmp\n") if ($me != $none); 
+		return;
+	}
+	my($i);
+	my($now) = time;
+	print OUT "1.0\n";
+	for ($i = 0; ($i <= $#objects); $i++) {
+		# Don't save recycled objects
+		next if ($objects[$i]{"type"} == $none); 
+		# Send stale topics home, if they aren't already home
+		if ($objects[$i]{"type"} == $topic) {
+			if ($objects[$i]{"location"} != $objects[$i]{"home"}) {
+				&sendHome($i) if ($now - $objects[$i]{"lastuse"} > $topicStaleTime); 
+			}
+		}
+		print OUT $i, "\n";
+		# Now regular data					
+		my($attribute, $value);
+		foreach $attribute (keys %{$objects[$i]}) {
+			# Important: filter out any connection  dependent attributes here if you don't
+			# want them dumped and restored.
+			next if ($attribute eq "activeFd"); # Connection dependent. Don't save it.
+			next if ($attribute eq "lastPing"); # Connection dependent. Don't save it.
+			next if ($attribute eq "brain"); # Do not attempt to write out the brain
+			next if ($attribute eq "id"); # Already written out.
+			$value = $objects[$i]{$attribute};
+			$value =~ s/\\n/\\\\n/g;
+			$value =~ s/\r\n/\\n/g;
+			$value =~ s/\n/\\n/g;
+			# Trim out null values at save time.
+			print OUT $attribute, " ", $value, "\n" if ($value ne ""); 
+		}
+		print OUT "<END>\n";
+	}
+	if (!close(OUT)) {
+		&wall(1, "Warning: couldn't complete save to $dbFile.tmp!");
+		# Don't try again right away
+		$lastdump = $now;
+		return;
+	}
+	unlink("$dbFile");
+	rename "$dbFile.tmp", "$dbFile";	
+	&tellPlayer($me, "Dump complete.") if ($me != $none);
+	$lastdump = $now;
+}
+
+sub help {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($found);
+	$arg = "index" if ($arg eq ""); 
+	$arg = "*" . $arg;
+	if (!open(IN, $helpFile)) {
+		&tellActiveFd($i, "ERROR: the file " . $helpFile .  " is missing.");
+		return;
+	}
+	&tellPlayer($me, "");
+	$found = 0;
+	while(<IN>) {
+		s/\s+$//;	
+		if ($arg eq $_) {
+			$found = 1;
+			last;
+		}
+	}
+	if (!$found) {
+		&tellPlayer($me, "Sorry, there is no such help topic. Try just typing help.");
+		close(IN);
+		return;
+	}
+	while(<IN>) {
+		s/\s+$//;	
+		last if (substr($_, 0, 1) eq "*"); 
+		&tellPlayer($me, $_);
+	}
+	close(IN);
+}
+
+sub motd {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&sendFile($me, $motdFile);	
+}
+
+sub welcome {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&sendFile($me, $welcomeFile);	
+}
+
+sub sex {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if (($arg1 eq "") || ($arg2 eq "")) {
+		&tellPlayer($me, "Syntax: \@sex object = <gender>");
+		return;
+	}
+	if (substr($arg1, 0, 1) eq "#") {
+		$id = substr($arg1, 1);
+		$id = &idBounds($id);
+	} else {
+		$id = &findContents($objects[$me]{"location"}, $arg1);
+		$id = &findContents($me, $arg1) if ($id == $none); 
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "I don't see that object here.");
+		return;
+	}								
+	if ((!&wizardTest($me)) && ($objects[$id]{"owner"} != $me)) {
+		&tellPlayer($me, "You don't own that.");
+		return;
+	}
+	$objects[$id]{"sex"} = $arg2;
+	&tellPlayer($me, "Gender set.");
+}
+
+sub set {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($flag, $id);
+	&tellPlayer($me, "Syntax: \@set object = flag or !flag") if (($arg1 eq "") || ($arg2 eq "")); 
+	if (substr($arg1, 0, 1) eq "#") {
+		$id = substr($arg1, 1);
+		$id = &idBounds($id);
+	} else {
+		$id = &findContents($objects[$me]{"location"}, $arg1);
+		$id = &findContents($me, $arg1) if ($id == $none); 
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "I don't see that object here.");
+		return;
+	}								
+	if ((!&wizardTest($me)) && ($objects[$id]{"owner"} != $me)) {
+		&tellPlayer($me, "You don't own that.");
+		return;
+	}
+	if (substr($arg2, 0, 1) eq "!") {		
+		if (!$flags{substr($arg2, 1)}) {
+			&tellPlayer($me, "No such flag.");
+			return;
+		}
+		$flag = $flags{substr($arg2, 1)}{"value"};
+		if (($flag == $flags{"wizard"}{"value"}) || ($flag == $flags{"builder"}{"value"})) {
+			if (!&wizardTest($me)) {
+				&tellPlayer($me, "Only a wizard can do that.");
+				return;
+			}
+			if ($id == 1) {
+				&tellPlayer($me, "Player #1 is always a wizard.");
+				return;
+			}
+		}
+		$objects[$id]{"flags"} &= ~$flag;
+		&tellPlayer($me, "Flag cleared.");
+	} else {
+		if (!$flags{$arg2}) {
+			&tellPlayer($me, "No such flag.");
+			return;
+		}
+		$flag = $flags{$arg2};
+		if (($flag == $flags{"wizard"}{"value"}) || ($flag == $flags{"builder"}{"value"})) {
+			if (!&wizardTest($me)) {
+				&tellPlayer($me, "Only a wizard can do that.");
+				return;
+			}
+			if ($id == 1) {
+				&tellPlayer($me, "Player #1 is always a wizard.");
+				return;
+			}
+		}
+		$objects[$id]{"flags"} |= $flag;
+		&tellPlayer($me, "Flag set.");
+	}	
+}
+
+sub whisper {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($id);
+	if (($arg1 eq "") || ($arg2 eq "")) {
+		&tellPlayer($me, "Syntax: .person message, .person,person,person message, or whisper person = message");
+		return;
+	}
+	my(@ids) = &getIdsSpokenTo($me, $arg1);
+	if (!int(@ids)) {
+		# Nobody passed muster
+		return;
+	}
+	my($names, $lnames);
+	$names = " ";
+	for ($i = 0; ($i < int(@ids)); $i++) {
+		if ($i > 0) {
+			if ($i == (int(@ids) - 1)) {
+				$names .= " and ";
+			} else {
+				$names .= ", ";
+			}
+		}
+		$names .= $objects[$ids[$i]]{"name"};
+	}
+	$names .= ".";
+	my(%ids);
+	for $id (@ids) {	
+		next if (exists($ids{$id})); 
+		$ids{$id} = 1;
+		my($n) = $objects[$id]{"name"};
+		$lnames = $names;
+		$lnames =~ s/ $n([,\.\ ])/ you$1/;
+		&tellPlayer($id, $objects[$me]{"name"} . " whispers, \"" .  $arg2 . "\" to$lnames");
+	}	
+	&tellPlayer($me, "You whisper \"" . $arg2 . "\" to$names");
+}
+
+sub getIdsSpokenTo {
+	my($me, $arg1) = @_;
+	my(@refs) = split(/,/, $arg1);
+	my(@ids, $i);
+	for $i (@refs) {
+		$i = &canonicalizeWord($me, $i);
+		if ($i =~ /^#(.*)/) {
+			$id = &idBounds($1);
+		} else {
+			$i =~ tr/A-Z/a-z/;
+			if (!exists($playerIds{$i})) {
+				$id = &findContents($objects[$me]{"location"}, $i, $player);
+				if ($id == $none) {
+					&tellPlayer($me, "Sorry, there is no player named $i.\n");	
+					next;
+				}
+			} else {
+				$id = $playerIds{$i};
+			}
+		}
+		if ($objects[$id]{"activeFd"} == $none) {
+			&tellPlayer($me, "$i is not logged in.");
+			next;
+		}
+		if ($objects[$id]{"type"} != $player) { 
+			&tellPlayer($me, "$i is an inanimate object.");
+			next;
+		}	
+		push @ids, $id;
+	}
+	return @ids;
+}
+
+sub topic {
+	my($me, $arg, $arg1, $arg2, $emote) = @_;
+	my($id) = &findContents($objects[$me]{"location"}, $arg1, $topic);
+	if ($id == $none) {
+		&tellPlayer($me, "There is no topic here called " .  $arg1 . ". Type \@topic $arg1 to raise a topic.");
+		return;
+	}
+	if (!&filterTopic($me, $objects[$id]{"name"})) {
+		&tellPlayer($me, "You are not joined to that topic. " .  "\@join " . $objects[$id]{"name"} . " first.");		
+		return;
+	}
+	my($tn) = "<" . $objects[$id]{"name"} . ">";
+	if (!$emote) {
+		my($output) = "You say$to, \"" . $arg2 . "\" $tn";
+		&tellPlayer($me, $output);
+		&tellRoom($objects[$me]{"location"}, $me, $objects[$me]{"name"} . " says, \"" . $arg2 . "\" $tn", $objects[$me]{"name"}, $objects[$id]{"name"});
+	} else {
+		my($s);
+		if (!($arg2 =~ /^[,']/)) {
+			$s = " ";
+		}
+		&tellRoom($objects[$me]{"location"}, "", $objects[$me]{"name"} . $s . $arg2 . " $tn", $objects[$me]{"name"}, $objects[$id]{"name"});
+	}
+	$objects[$id]{"lastuse"} = time;
+}
+
+sub setDescription {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&setField($me, $arg, $arg1, $arg2, "description", "Description");
+}
+
+sub setFail {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&setField($me, $arg, $arg1, $arg2, "fail", "Fail");
+}
+
+sub setOfail {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&setField($me, $arg, $arg1, $arg2, "ofail", "Ofail");
+}
+
+sub setOdrop {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&setField($me, $arg, $arg1, $arg2, "odrop", "Odrop");
+}
+
+sub setSuccess {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&setField($me, $arg, $arg1, $arg2, "success", "Success");
+}
+
+sub setOsuccess {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&setField($me, $arg, $arg1, $arg2, "osuccess", "Osuccess");
+}
+
+sub setLock {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($id);
+	$id = &setField($me, $arg, $arg1, $arg2, "lock", "Lock");
+	return if ($id == $none); 
+	# Canonicalize the lock now, not when the lock is tested
+	my($lock, $i, $word, $expr, $len, @words, $c);
+	$lock = $objects[$id]{"lock"};	
+	$word = "";	
+	$expr = "";
+	$len = length($lock);
+	for ($i = 0; ($i < $len); $i++) {
+		$_ = $c = substr($lock, $i, 1);
+		if (/[\(\)\&\|\!]/) {
+			if ($word ne "") {
+				$word = &visibleCanonicalizeWord($me, $word);
+				$expr .= $word;
+			}
+			$expr .= $c;
+			$word = "";
+		} else {
+			$word .= $c;
+		}
+	}
+	$expr .= &visibleCanonicalizeWord($me, $word) if ($word ne ""); 
+	$objects[$id]{"lock"} = $expr;	
+}
+
+sub sign {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($id);
+	if (substr($arg1, 0, 1) ne "#") {
+		$id = &findContents($me, $arg1);
+		$id = &findContents($objects[$me]{"location"}, $arg1) if ($id == $none); 
+	} else {
+		$id = substr($arg1, 1);
+		$id = &idBounds($id);
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "I don't see that here.");
+		return;
+	}
+	if (length($arg2) > 256) {
+		&tellPlayer($me, "Signatures are limited to 256 characters apiece. Please sign again (briefly). Sorry for the inconvenience.");
+		return;
+	}
+	if (!(($objects[$id]{"flags"} & $flags{"book"}{"value"}) && ($objects[$id]{"type"} == $thing))) {
+		&tellPlayer($me, "You can't sign that!");
+		return $none;
+	}
+	if ($objects[$id]{"flags"} & $flags{"once"}{"value"}) {
+		#If the once flag is set, remove all
+		#previous signatures by this person.
+		my($name) = quotemeta($objects[$me]{"name"});
+		$objects[$id]{"description"} =~ s/\r\n$name: [^\r\n]*\r\n/\r\n/g;
+		$objects[$id]{"description"} =~ s/\r\n$name: [^\r\n]*$//g;
+	}
+	$objects[$id]{"description"} .= "\r\n" .  $objects[$me]{"name"} . ": " . $arg2;
+	&tellPlayer($me, $objects[$id]{"name"} . " signed.");
+	&tellRoom($objects[$me]{"location"}, $me, $objects[$me]{"name"} .  " adds a signature to " . $objects[$id]{"name"} . ".");
+}
+
+sub unsign {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($id);
+	if (substr($arg1, 0, 1) ne "#") {
+		$id = &findContents($me, $arg1);
+		$id = &findContents($objects[$me]{"location"}, $arg1) if ($id == $none); 
+	} else {
+		$id = substr($arg1, 1);
+		$id = &idBounds($id);
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "I don't see that here.");
+		return;
+	} else {
+		if (!(($objects[$id]{"flags"} & $flags{"book"}{"value"}) && ($objects[$id]{"type"} == $thing))) {
+			&tellPlayer($me, "That's not a book!");
+			return;
+		}
+		my($name) = quotemeta($objects[$me]{"name"});
+		# No more global unsign -- take off the g
+		$objects[$id]{"description"} =~ s/\r\n$name: [^\r\n]*\r\n/\r\n/;
+		$objects[$id]{"description"} =~ s/\r\n$name: [^\r\n]*$//;
+		&tellPlayer($me, $objects[$id]{"name"} . " unsigned.");
+	}
+}
+
+sub visibleCanonicalizeWord {
+	my($me, $word) = @_;
+	my($id);
+	$word =~ s/\s+$//;
+	$word =~ s/^\s+//;
+	return if ($word eq ""); 
+	$word = &canonicalizeWord($me, $word);
+	
+	# Additional canonicalization
+	$id = &findContents($me, $word);
+	if ($id != $none) {
+		$word = "#" . $id;
+	} else {	
+		$id = &findContents($objects[$me]{"location"}, $word);
+		$word = "#" . $id if ($id != $none); 
+	}
+	return $word;
+}
+	
+sub setField {
+	my($me, $arg, $arg1, $arg2, $field, $name) = @_;
+	my($id);
+	if (substr($arg1, 0, 1) ne "#") {
+		$id = &findContents($me, $arg1);
+		$id = &findContents($objects[$me]{"location"}, $arg1) if ($id == $none); 
+	} else {
+		$id = substr($arg1, 1);
+		$id = &idBounds($id);
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "I don't see that here.");
+		return $none;
+	} else {
+		if (($objects[$id]{"owner"} != $me) && (!&wizardTest($me))) {
+			&tellPlayer($me, "That doesn't belong to you!");
+			return $none;
+		} else {
+			$objects[$id]{$field} = $arg2;
+			if ($arg2 eq "") {
+				&tellPlayer($me, $name . " cleared.");
+			} else {
+				&tellPlayer($me, $name . " set.");
+			}
+		}
+	}
+	return $id;
+}
+
+sub page {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if (substr($arg1, 0, 1) ne "#") {
+		my $n = $arg1;
+		$n =~ tr/A-Z/a-z/;
+		if (!exists($playerIds{$n})) {
+			&tellPlayer($me, "There is no such player.");
+			return;
+		}
+		$id = $playerIds{$n};
+	} else {
+		$id = substr($arg1, 1);
+		$id = &idBounds($id);
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "That is not a valid player.");
+		return;
+	}
+	if ($objects[$id]{"type"} != $player) {
+		&tellPlayer($me, "That is not a valid player.");
+		return;
+	}
+	if ($objects[$id]{"activeFd"} == $none) {
+		&tellPlayer($me, "That player is not logged in.");
+		return;
+	}
+	if ($arg2 eq "") {
+		&tellPlayer($id, $objects[$me]{"name"} .  " is looking for you in " .  $objects[$objects[$me]{"location"}]{"name"} . ".");
+		&tellPlayer($me, "You paged " . $objects[$id]{"name"} . ".");
+	} else {		
+		&tellPlayer($id, $objects[$me]{"name"} . " pages: " . $arg2);
+		&tellPlayer($me, "You paged " . $objects[$id]{"name"} . ": " . $arg2);
+	}
+}	
+
+sub boot {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if (!&wizardTest($me)) {
+		&tellPlayer($me, "Only a wizard can do that.");
+		return;
+	}
+	if (substr($arg, 0, 1) ne "#") {
+		my($n);
+		$n = $arg;
+		$n =~ tr/A-Z/a-z/;
+		if (!exists($playerIds{$n})) {
+			&tellPlayer($me, "There is no such player.");
+			return;
+		}
+		$id = $playerIds{$n};
+	} else {
+		$id = substr($arg, 1);
+	}
+	if ($objects[$id]{"type"} != $player) {
+		&tellPlayer($me, "That is not a valid player.");
+		return;
+	}
+	if ($objects[$id]{"activeFd"} == $none) {
+		&tellPlayer($me, "That player is not logged in.");
+		return;
+	}
+	if ($id == 1) {			
+		&tellPlayer($me, "Player #1 cannot be booted.");
+		return;
+	}
+	&closePlayer($id);
+	&tellPlayer($me, "Booted.");
+}	
+
+sub alias {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if (substr($arg1, 0, 1) ne "#") {
+		$id = &findContents($me, $arg1);
+		$id = &findContents($objects[$me]{"location"}, $arg1) if ($id == $none); 
+	} else {
+		$id = substr($arg1, 1);
+		$id = &idBounds($id);
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "I don't see that here.");
+		return;
+	} else {
+		if (($objects[$id]{"owner"} != $me) && (!&wizardTest($me))) {
+			&tellPlayer($me, "That doesn't belong to you!");
+		} else {
+			if (($objects[$id]{"type"} == $player) || ($objects[$id]{"flags"} & $flags{"creature"}{"value"})) {
+				my $n = $arg2;
+				$n =~ tr/A-Z/a-z/;
+				$n =~ s/\s+//g;
+				if (exists($playerIds{$n})) {
+					&tellPlayer($me, "That name is already taken.");
+					return;
+				}
+				$playerIds{$n} = $id;
+			}
+			$objects[$id]{"alias"} = $arg2;
+			&tellPlayer($me, "Alias set.");
+		}
+	}
+}
+
+sub name {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if (substr($arg1, 0, 1) ne "#") {
+		$id = &findContents($me, $arg1);
+		$id = &findContents($objects[$me]{"location"}, $arg1) if ($id == $none); 
+	} else {
+		$id = substr($arg1, 1);
+		$id = &idBounds($id);
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "I don't see that here.");
+		return;
+	} else {
+		if (($objects[$id]{"owner"} != $me) && (!&wizardTest($me))) {
+			&tellPlayer($me, "That doesn't belong to you!");
+		} else {
+			if ($objects[$id]{"type"} == $player) {
+				my $n = $arg2;
+				$n =~ tr/A-Z/a-z/;
+				$n =~ s/\s+//g;
+				if (exists($playerIds{$n})) {
+					&tellPlayer($me, "That name is already taken.");
+					return;
+				}
+				my $n2 = $objects[$id]{"name"};
+				$n2 =~ tr/A-Z/a-z/;
+				undef($playerIds{$n2});
+				$playerIds{$n} = $id;
+			}
+			if ($objects[$id]{"type"} == $topic) {
+				if ($arg2 =~ / ,/) {
+					&tellPlayer($me, "Commas and spaces are not allowed in topic names.");
+					return;
+				}
+			}
+			$objects[$id]{"name"} = $arg2;
+			&tellPlayer($me, "Name set.");
+		}
+	}
+}
+
+sub chown {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if (substr($arg1, 0, 1) ne "#") {
+		$id = &findContents($me, $arg1);
+		if ($id == $none) {
+			$id = &findContents($objects[$me]{"location"}, $arg1);
+		}
+	} else {
+		$id = substr($arg1, 1);
+		$id = &idBounds($id);
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "I don't see that here.");
+		return;
+	} elsif ($objects[$id]{"type"} == $player) {
+		&tellPlayer($me, "Players always own themselves.");
+		return;
+	} else {
+		if (($objects[$id]{"owner"} != $me) && (!&wizardTest($me)) && !($objects[$id]{"flags"} & $flags{"chownok"}{"value"})) {
+			&tellPlayer($me, "That doesn't belong to you!");
+		} else {
+			my($arg2Id);
+			if (substr($arg2, 0, 1) eq '#') {
+				$arg2Id = substr($arg2, 1);
+			} else {
+				my $n = $arg2;
+				if ($n eq "me") {
+					$arg2Id = $me;
+				} else {
+					$n =~ tr/A-Z/a-z/;
+					$arg2Id = $playerIds{$n};
+				}
+			}
+			if ($objects[$arg2Id]{"type"} != $player) {
+				&tellPlayer($me, $arg2 . " is not a valid player.");
+				return;
+			}	
+			$objects[$id]{"owner"} = $arg2Id;
+			&tellPlayer($me, "Owner set.");
+			&tellPlayer($arg2Id, $objects[$me]{"name"} .  " has given you #$id (" .  $objects[$id]{"name"} . ").") unless ($arg4Id == $me);
+		}
+	}
+}
+
+sub pcreate {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if (!&wizardTest($me)) {
+		&tellPlayer($me, "Sorry, only a wizard can do that.");
+		return;
+	}
+	if (($arg1 eq "") || ($arg2 eq "")) {
+		&tellPlayer($me, "Syntax: \@pcreate <name> = <password>");
+		return;
+	}
+	if (substr($arg1, 0, 1) eq "#") {
+		&tellPlayer($me, "Sorry, names cannot begin with #.");
+		return;
+	}
+	$_ = $arg1;
+	if (/\s/) {
+		&tellPlayer($me, "Sorry, names cannot contain spaces.");
+		return;
+	}
+	my $n = $arg1;
+	$n =~ tr/A-Z/a-z/;
+	if (exists($playerIds{$n})) {
+		&tellPlayer($me, "Sorry, that name is taken.");
+		return;
+	}	
+	my $id = &addObject($me, $arg1, $player);
+	$playerIds{$n} = $id;
+	$objects[$id]{"owner"} = $id;
+	&addContents(0, $id);
+	$objects[$id]{"password"} = md5_base64($arg2);
+	if ($allowBuild) {
+		$objects[$id]{"flags"} = $flags{"builder"}{"value"};
+	} else {
+		$objects[$id]{"flags"} = 0;
+	}
+}
+
+sub gag {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if ($arg eq "") {
+		&tellPlayer($me, "Syntax: \@gag name");
+		return;
+	}
+	if ($arg =~ / /) {
+		&tellPlayer($me, "PurlMUSH user names do not contain spaces.");
+		return;
+	}
+	# Allow big-geek syntax
+	if ($arg =~ /^#(\d+)$/) {
+		&tellPlayer($me, "That player does not exist.") if (!defined($objects[$1])); 
+		&tellPlayer($me, "Only players can be gagged.") if ($objects[$1]{"type"} != $player); 
+		# Okay, now we can accept it.
+		$arg = $objects[$1]{"name"};
+	}
+	# Strip a leading *, the global player reference thingie,
+	# not required here but allowed.
+	if ($arg =~ /^\*(\w+)$/) {
+		$arg = $1;
+	}
+	# Look up the player. Do they exist?
+	my($copy) = $arg;
+	$copy =~ tr/A-Z/a-z/;
+	if (!exists($playerIds{$copy})) {
+		# Break the bad news
+		&tellPlayer($me, "There is no player by that name.");
+		return;
+	}
+	# Check whether that player is already gagged
+	$arg = quotemeta($arg);
+	if ($objects[$me]{"gags"} =~ /$arg /i) {
+		&tellPlayer($me, "Already gagged.");
+		return;
+	}
+	# Now we're ready to gag! Great!
+	# Be sure to use the proper name to get the right case.
+	$objects[$me]{"gags"} .= $objects[$playerIds{$copy}]{"name"} . " ";
+	&tellPlayer($me, "Gag in place.");
+}
+
+sub ungag {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if ($arg eq "") {
+		&tellPlayer($me, "Syntax: \@ungag name");
+		return;
+	}
+	if ($arg =~ / /) {
+		&tellPlayer($me, "PurlMUSH user names do not contain spaces.");
+		return;
+	}
+	# Allow big-geek syntax
+	if ($arg =~ /^#(\d+)$/) {
+		if (!defined($objects[$1])) {
+			&tellPlayer($me, "That player does not exist."); 
+		}
+		if ($objects[$1]{"type"} != $player) {
+			&tellPlayer($me, "Only players can be gagged.");
+		}
+		# Okay, now we can accept it.
+		$arg = $objects[$1]{"name"};
+	}
+	# Strip a leading *, the global player reference thingie,
+	# not required here but allowed.
+	if ($arg =~ /^\*(\w+)$/) {
+		$arg = $1;
+	}
+
+	# We don't care whther the player exists -- removing
+	# a gag for a now-nonexistent player is pretty common!
+
+	# Check whether that player is gagged.
+	$arg = quotemeta($arg);
+	if ($objects[$me]{"gags"} =~ /$arg /i) {
+		# Remove the gag of that player.
+		$objects[$me]{"gags"} =~ s/$arg //i;
+		&tellPlayer($me, "Gag removed.");
+		return;
+	}
+	# No such gag.
+	&tellPlayer($me, "That player is not gagged, or you mistyped their name.");
+}
+
+sub password {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if ($arg2 eq "") {
+		if ($arg1 eq "") {
+			&tellPlayer($me, "Syntax: \@password <name> = <password> or \@password <newpassword>");
+			return;
+		}
+		$arg2 = $arg1;
+		$arg1 = "#" . $me;
+	}
+	my $n = $arg1;
+	$n =~ tr/A-Z/a-z/;
+	my($id);
+	if (substr($arg1, 0, 1) eq "#") {
+		$id = substr($arg1, 1);
+		$id = &idBounds($id);
+	} else {
+		if (!exists($playerIds{$n})) {
+			&tellPlayer($me, "There is no such player.");
+			return;
+		}
+		$id = $playerIds{$n};
+	}
+	if (($id != $me) && (!&wizardTest($me))) {
+		&tellPlayer($me, "Sorry, you can't do that.");
+		return;
+	}
+	if ($objects[$id]{"type"} != $player) {
+		&tellPlayer($me, "That is not a player!");
+		return;
+	}
+	$objects[$id]{"password"} = md5_base64($arg2);
+	&tellPlayer($me, "Password changed.");			
+}
+
+sub clean {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if ($arg ne "") {
+		&tellPlayer($me, "\@clean takes no arguments.");
+		return;
+	}	
+	my(@list, $e);
+	@list = split(/,/, $objects[$objects[$me]{"location"}]{"contents"});
+	if (($objects[$objects[$me]{"location"}]{"owner"} != $me) && (!&wizardTest($me))) {
+		&tellPlayer($me, "You can only \@clean locations you own.");
+		return;
+	}		
+	foreach $e (@list) {
+		if ($objects[$e]{"home"} != $objects[$me]{"location"}) {
+			next if ($objects[$e]{"activeFd"} != $none); # Leave conscious objects alone
+			&sendHome($e) if ($objects[$e]{"type"} != $exit); 
+		}
+	}
+}
+
+sub teleport {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if ($arg2 eq "") {
+		if ($arg1 ne "") {
+			$arg2 = $arg1;
+			$arg1 = "#" . $me;
+		} else {
+			&tellPlayer($me, "Syntax: \@teleport thing = #place");
+			return;
+		}
+	}
+	if (substr($arg2, 0, 1) ne "#") {
+		&tellPlayer($me, "Syntax: \@teleport thing = #place");
+		return;
+	}
+	my($id);
+	if (!(substr($arg1, 0, 1) eq "#")) {
+		$id = &findContents($objects[$me]{"location"}, $arg1);
+		$id = &findContents($me, $arg1) if ($id == $none); 
+	} else {
+		$id = substr($arg1, 1);
+		$id = &idBounds($id);
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "I don't see that here.");
+		return;
+	}
+	my($arg2id) = substr($arg2, 1);
+	if (($objects[$id]{"type"} != $player) && ($objects[$id]{"type"} != $thing) && ($objects[$id]{"type"} != $exit) && ($objects[$id]{"type"} != $topic)) {
+		&tellPlayer($me, "You can't teleport that.");
+		return;
+	}
+	if (($objects[$id]{"owner"} != $me) && (!&wizardTest($me))) {
+		if (!($objects[$id]{"flags"} & $flags{"jumpok"}{"value"})) {
+			&tellPlayer($me, "That object is not set jumpok.");
+			return;
+		}
+	}			
+	if ($arg2id == $home) {
+		&sendHome($id);	
+		&tellPlayer($me, "Teleported.");
+		return;
+	}
+	$id = &idBounds($id);
+	if ($id == $none) {
+		&tellPlayer($me, "That destination id is not valid.");
+		return;
+	}
+	if ($objects[$arg2id]{"type"} != $room) {
+		&tellPlayer($me, "That is not a valid destination.");
+		return;
+	}
+	if (($objects[$arg2id]{"owner"} != $me) && (!&wizardTest($me))) {
+		if (!($objects[$arg2id]{"flags"} & $flags{"jumpok"}{"value"})) {
+			&tellPlayer($me, "That destination is not set jumpok.");
+			return;
+		}
+	}		
+	&dropAll($me) if ($objects[$objects[$me]{"location"}]{"flags"} & $flags{"puzzle"}{"value"}); 
+	my($oldLocation) = $objects[$id]{"location"};
+	&removeContents($objects[$id]{"location"}, $id);
+	&tellRoom($objects[$id]{"location"}, $none, $objects[$id]{"name"} .  " disappears.");
+	&tellRoom($arg2id, $none, $objects[$id]{"name"} .  " materializes.");
+	&addContents($arg2id, $id);
+	&describe($id, $arg2id, 0);
+	&tellPlayer($id, $objects[$me]{"name"} .  " has teleported you to " .  $objects[$arg2id]{"name"} . ".") if ($me != $id); 
+	&tellPlayer($me, "Teleported.");
+}
+
+sub link {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if (!&builderTest($me)) {
+		&tellPlayer($me, "Sorry, only an authorized builder can do that.");
+		return;
+	}	
+	if ($arg2 eq "") {
+		&tellPlayer($me, "Syntax: \@link person/thing = #place");
+		return;
+	}
+	$_ = $arg2;
+	my($id);
+	if (substr($arg1, 0, 1) ne "#") {
+		$id = &findContents($objects[$me]{"location"}, $arg1);
+		$id = &findContents($me, $arg1) if ($id == $none); 
+	} else {
+		$id = substr($arg1, 1);
+		$id = &idBounds($id);
+	}
+	if ($id == $none) {
+		&tellPlayer($me, "I don't see that here.");
+		return;
+	}
+	if (($objects[$id]{"owner"} != $me) && (!&wizardTest($me))) {
+		&tellPlayer($me, "You don't own that.");
+		return;
+	}
+	my $arg2id = $none;
+	if ($objects[$id]{"type"} == $exit) {
+		if (($arg2 eq "nowhere") || ($arg2 eq "NOWHERE")) {
+			$arg2id = $nowhere;
+		} elsif (($arg2 eq "home") || ($arg2 eq "HOME")) {
+			$arg2id = $home;
+		}
+	}
+	if ($arg2id == $none) {
+		if (substr($arg2, 0, 1) ne "#") {
+			&tellPlayer($me, "Syntax: \@link person/thing = #place");
+			return;
+		}
+		$arg2id = substr($arg2, 1);
+		$arg2id = &idBounds($arg2id);
+	}
+	if ($objects[$id]{"type"} == $exit) {
+		# Special case for 'nowhere' and 'home'
+		if (($arg2id == $nowhere) || ($arg2id == $home)) {
+			$objects[$id]{"action"} = $arg2id;
+			&tellPlayer($me, "Destination set.");
+			return;
+		}
+	}
+	if ($arg2id == $none) {
+		&tellPlayer($me, "That destination id is not valid.");
+		return;
+	}
+	if ($objects[$arg2id]{"type"} != $room) {
+		&tellPlayer($me, "That is not a valid destination.");
+		return;
+	}
+	if (($objects[$id]{"type"} != $player) && ($objects[$id]{"type"}
+		!= $thing) && ($objects[$id]{"type"} != $topic) 
+		&& ($objects[$id]{"type"} != $exit)) 
+	{
+		&tellPlayer($me, "You can't link that.");
+		return;
+	}
+	if ($objects[$id]{"type"} == $exit) {
+		if ((!($objects[$arg2id]{"flags"} & $flags{"linkok"}{"value"})) && (!($objects[$arg2id]{"owner"} == $me)) && (!&wizardTest($me))) {
+			tellPlayer($me, "That destination does not have its linkok flag set.");
+		} else {
+			$objects[$id]{"action"} = $arg2id;
+			&tellPlayer($me, "Destination set.");
+		}
+	} else {
+		if ((!($objects[$arg2id]{"flags"} & $flags{"abode"}{"value"})) && (!($objects[$arg2id]{"owner"} == $me)) && (!&wizardTest($me))) {
+			&tellPlayer($me, "That location does not have its abode flag set.");
+		} else {
+			$objects[$id]{"home"} = $arg2id;
+			&tellPlayer($me, "Home set.");
+		}
+	}
+}
+
+sub open {
+	my($me, $arg, $arg1, $arg2) = @_;
+
+	if (!&builderTest($me)) {
+		&tellPlayer($me, "Sorry, only an authorized builder can do that.");
+		return;
+	}	
+	if (($objects[$objects[$me]{"location"}]{"owner"} != $me) && (!&wizardTest($me))) {
+		if (!($objects[$objects[$me]{"location"}]{"flags"} & $flags{"buildok"}{"value"})) {
+			&tellPlayer($me, "This location is not set buildok.");
+			return;
+		}
+	}
+	$arg1 =~ s/\s+;/;/g;
+	$arg1 =~ s/;\s+/;/g;
+	if ($arg2 eq "") {
+		&tellPlayer($me, "Syntax: \@open direction;synonym = #destid");
+	} else {
+		$_ = $arg2;
+		$arg2 = "#" . $nowhere if ($arg2 eq "nowhere"); 
+		$arg2 = "#" . $home if ($arg2 eq "home"); 
+		if (substr($arg2, 0, 1) ne "#") {
+			&tellPlayer($me, "Syntax: \@open direction;synonym = #destid (note the # sign)");
+		} else {
+			$arg2 = substr($arg2, 1);
+			if (($arg2 == $home) || ($arg2 == $nowhere)) {
+				my $id = &addObject($me, $arg1, $exit);
+				&addContents($objects[$me]{"location"}, $id);
+				$objects[$id]{"action"} = $arg2;
+				&tellPlayer($me, "Opened.");
+				return;
+			}
+			$arg2 = &idBounds($arg2);
+			if (($arg2 == $none) || ($objects[$arg2]{"type"} != $room)) {
+				&tellPlayer($me, "That destination id is not valid.");
+				return;
+			}
+			if (($objects[$arg2]{"owner"} != $me) && (!&wizardTest($me))) {
+				if (!($objects[$arg2]{"flags"} & $flags{"linkok"}{"value"})) {
+					&tellPlayer($me, "That destination does not have its linkok flag set.");
+					return;
+				}
+			}
+			my $id = &addObject($me, $arg1, $exit);
+			&addContents($objects[$me]{"location"}, $id);
+			$objects[$id]{"action"} = $arg2;
+			$objects[$id]{"home"} = $objects[$me]{"location"};
+			&tellPlayer($me, "Opened.");
+		}
+	}
+}
+
+sub addObject {
+	my($maker, $name, $type) = @_;
+	my($id, $found);
+	$found = 0;
+	for ($id = 0; ($id <= $#objects); $id++) {
+		if ($objects[$id]{"type"} == $none) {
+			$found = 1;
+			last;
+		}
+	}
+	$id = $#objects + 1 if (!$found); 
+	$objects[$id]{"name"} = $name;
+	$objects[$id]{"type"} = $type;
+	$objects[$id]{"activeFd"} = $none;
+	$objects[$id]{"owner"} = $maker;
+	&tellPlayer($maker, $objects[$id]{"name"} .  " has been created as #" .  $id . ".") if ($maker != 0);
+	return $id;
+}
+
+sub addContents {
+	my($addto, $add) = @_;
+
+	# Whatever you do, don't let any commas get in here 
+	$add =~ s/,//g;
+
+	if (length($objects[$addto]{"contents"}) > 0) {
+		$objects[$addto]{"contents"} .= "," . $add;
+	} else {
+		$objects[$addto]{"contents"} = $add;
+	}
+	$objects[$add]{"location"} = $addto;
+}
+	
+sub findContents {			  	
+	my($container, $arg, $type) = @_;
+	my(@list);
+	$arg =~ tr/A-Z/a-z/;
+	@list = split(/,/, $objects[$container]{"contents"});
+	my($e);
+	if (substr($arg, 0, 1) eq "#") {
+		foreach $e (@list) {
+			if (("#" . $e) eq $arg) {
+				return $e if ((!$type) || ($objects[$e]{"type"} == $type)); 
+			}
+		}
+		return $none;
+	} 	
+	#First an exact match
+	foreach $e (@list) {
+		my $name = $objects[$e]{"name"};
+		$name =~ tr/A-Z/a-z/;
+		if ($name eq $arg) {
+			return $e if ((!$type) || ($objects[$e]{"type"} == $type)); 
+		}
+		#TinyMUD semicolon stuff
+		if ($objects[$e]{"type"} == $exit) {
+		 	my @elist = split(/;/, $objects[$e]{"name"});
+			foreach my $f (@elist) {
+				$f =~ tr/A-Z/a-z/;
+				if ($f eq $arg) {
+					return $e if ((!$type) || ($objects[$e]{"type"} == $type)); 
+				}
+			}
+		}
+	}
+	#Okay, now an inexact match
+	foreach $e (@list) {
+		my $name = $objects[$e]{"name"};
+		$name =~ tr/A-Z/a-z/;
+		if (substr($name, 0, length($arg)) eq $arg) {
+			return $e if ((!$type) || ($objects[$e]{"type"} == $type)); 
+		}
+		#TinyMUD semicolon stuff
+		if ($objects[$e]{"type"} == $exit) {
+			my @elist = split(/;/, $objects[$e]{"name"});
+			foreach my $f (@elist) {
+				$f =~ tr/A-Z/a-z/;
+				if (substr($f, 0, length($arg)) eq $arg) {
+					return $e if ((!$type) || ($objects[$e]{"type"} == $type));
+				}
+			}
+		}
+	}
+	return $none;
+}
+
+sub removeContents {			  	
+	my($container, $id) = @_;
+	my @list = split(/,/, $objects[$container]{"contents"});
+	$objects[$container]{"contents"} = ""; 
+	foreach my $e (@list) {
+		&addContents($container, $e) if ($e ne $id); 
+	}	
+}
+
+sub describe {
+	my($to, $what, $details) = @_;
+	&describeBody(\&tellPlayer, $to, $to, $what, $details, 0);
+}
+
+sub describeBody {
+	my($output, $dest, $to, $what, $details) = @_;
+	my $found = 0;
+	if ($details) {
+		my $line = $objects[$what]{"name"} . " #" . $what .  " Owner: " .  $objects[$objects[$what]{"owner"}]{"name"} .  " Home: #" . int($objects[$what]{"home"}); 
+		my($key, $val);
+		while ($key = each(%flags)) {
+			if ($objects[$what]{"flags"} & $flags{$key}{"value"}) {
+				$line .= " " . $key;
+			}
+		}
+		&{$output}($dest, $line);
+		if ($objects[$what]{"type"} == $player) {
+			my($tz) = $objects[$what]{"tz"};
+			if ($tz eq "") {
+				&{$output}($dest, "Time Zone: Not Set");
+			} else {	
+				my($prefix) = "";
+				if ($tz < 0) {
+					$tz = -$tz;
+					$prefix = "-";
+				}
+				my($hours, $mins) = (int($tz / 60), $tz % 60);
+				&{$output}($dest, "Time Zone: " .  sprintf("%s%02d:%02d", $prefix, $hours, $mins));
+			}
+		}
+		if (&wizardTest($to) || ($objects[$what]{"owner"} == $to)) {
+			&{$output}($dest, "Fail: " . $objects[$what]{"fail"}) if ($objects[$what]{"fail"} ne ""); 
+			&{$output}($dest, "Ofail: " . $objects[$what]{"ofail"}) if ($objects[$what]{"ofail"} ne ""); 
+			&{$output}($dest, "Odrop: " . $objects[$what]{"odrop"}) if ($objects[$what]{"odrop"} ne ""); 
+			&{$output}($dest, "Success: " . $objects[$what]{"success"}) if ($objects[$what]{"success"} ne ""); 
+			&{$output}($dest, "Osuccess: " . $objects[$what]{"osuccess"}) if ($objects[$what]{"osuccess"} ne ""); 
+			&{$output}($dest, "Lock: " . $objects[$what]{"lock"}) if ($objects[$what]{"lock"} ne ""); 
+			&{$output}($dest, "Gags: " . $objects[$what]{"gags"}) if ($objects[$what]{"gags"} ne ""); 
+			&{$output}($dest, "Site/IP: " . $objects[$what]{"site"}."/".$objects[$what]{"ip"}) if ($objects[$what]{"ip"} ne ""); 
+			if ($objects[$what]{"type"} == $player) {
+				my($top);
+				if (($objects[$what]{"topicdefault"}) || (!exists($objects[$what] {"topicdefault"}))) {
+					$top = "Topics: ALL, except: ";
+				} else {
+					$top = "Topics: ";
+				}
+				my($tlist) = $objects[$what]{"topics"};
+				if (length($tlist)) {
+					$top .= "$tlist";
+				}
+				&{$output}($dest, $top);
+			}
+		} 
+		&{$output}($dest, "Location: #" . int($objects[$what]{"location"}));
+		if (&wizardTest($to) || ($objects[$what]{"owner"} == $to)) {
+			if ($objects[$what]{"type"} == $exit) {
+				my $dest = int($objects[$what]{"action"});
+				if ($dest == $nowhere) {
+					&{$output}($dest, "Destination: nowhere");
+				} elsif ($dest == $home) {
+					&{$output}($dest, "Destination: home");
+				} else {
+					&{$output}($dest, "Destination: #" . int($objects[$what]{"action"}));
+				}
+			}
+		}
+	} else {
+		&{$output}($dest, $objects[$what]{"name"}) if ($objects[$what]{"type"} != $exit); 
+	}
+	if ($objects[$what]{"description"} eq "") {
+		&{$output}($dest, "You see nothing special.");
+	} else {
+		&{$output}($dest, $objects[$what]{"description"});
+	}
+	my(@list,$desc, $first, $e);
+	@list = split(/,/, $objects[$what]{"contents"});
+	$desc = "";
+	$first = 1;
+	if ($details || (!($objects[$what]{"flags"} & $flags{"dark"}{"value"}))) { 
+		foreach $e (@list) {
+			if ($details) {
+				$found = 1;
+				if ($first) {
+					$first = 0;
+				} else {
+					$desc .= ", ";
+				}		
+				$desc .= $objects[$e]{"name"} . " #" . $e;
+			} else {
+				if (($objects[$e]{"type"} == $thing) || (($objects[$e]{"type"} == $player) && ($objects[$e]{"activeFd"} ne $none))) {
+					$found = 1;
+					if ($first) {
+						$first = 0;
+						$desc .= $objects[$e]{"name"};
+					} else {
+						$desc .= ", " . $objects[$e]{"name"};
+					}		
+				}
+			}
+		}		
+	}
+	if (!$found) {
+		if ($objects[$what]{"type"} == $room) { 
+			if ($details || (!($objects[$what]{"flags"} & $flags{"dark"}{"value"}))) { 
+				&{$output}($dest, "Contents: None");
+			}
+		}
+	} else {
+		if ($objects[$what]{"type"} == $player) {
+			&{$output}($dest, "Carrying:");
+		} else {
+			&{$output}($dest, "Contents:");
+		}
+		&{$output}($dest, $desc);
+	}
+	$first = 1;
+	$desc = "";
+	$found = 0;
+	if (($objects[$what]{"type"} == $room) && (!$details)) {
+		foreach $e (@list) {
+			$found = 1;
+			if (!$details) {
+				if (($objects[$e]{"type"} == $exit) && (!($objects[$e]{"flags"} & $flags{"dark"}{"value"}))) {
+					if ($first) {
+						$first = 0;
+					} else {
+						$desc .= ", ";
+					}		
+					my(@foo) = split(/;/, $objects[$e]{"name"});
+					$desc .= "\x01" . $foo[0] . "," .  $foo[0] . "\x02";
+				}
+			}
+		}		
+		if (!$found) {
+			&{$output}($dest, "Visible Exits: None");
+		} else {
+			&{$output}($dest, "Visible Exits:");
+			&{$output}($dest, $desc);
+		}
+	}
+	$found = 0;
+	$first = 1;
+	$desc = "";
+	if (!$details) {
+		my($topics);
+		foreach $e (@list) {
+			$found = 1;
+			if (!$details) {
+				if (($objects[$e]{"type"} == $topic) && (!($objects[$e]{"flags"} & $flags{"dark"}{"value"}))) {
+					if ($first) {
+						$first = 0;
+					} else {
+						$desc .= ", ";
+					}		
+					$desc .= $objects[$e]{"name"};
+				}
+			}
+		}				
+		if ($found) {
+			if ($objects[$what]{"type"} == $room) {
+				&{$output}($dest, "Active Topics:");
+			} else {
+				&{$output}($dest, "Topics:");
+			}
+			&{$output}($dest, $desc);
+		}
+	}
+}
+
+sub tellRoom {
+	my($id, $blind, $what, $from, $topic) = @_;
+	my($e, @list, $fromText);
+	$fromText = " (from $from)" if (($from ne "") || ($topic eq "")); 
+	@list = split(/,/, $objects[$id]{"contents"});
+	foreach $e (@list) {
+		if (($objects[$e]{"type"} == $player) || ($objects[$e]{"type"} == $thing && ($objects[$e]{"flags"} & $flags{"creature"}{"value"}))) {  
+			if ($e != $blind) {
+				# Filter annoyances out (apply gag filters).
+				if ($from ne "") {
+					my($tgag) = quotemeta($from);
+					# The player is not interested.
+					next if (($objects[$objects[$e]{"owner"}]{"gags"} =~ /^$tgag /i) || ($objects[$objects[$e]{"owner"}]{"gags"} =~ / $tgag /i)); 
+				}
+				# Apply topic filters.
+				next if (!&filterTopic($e, $topic)); 
+				my($msg) = $what;
+				
+				if ($objects[$objects[$e]{"owner"}]{"flags"} & $flags{"nospoof"}{"value"}) {
+					&tellPlayer($e, $msg . $fromText);
+				} else {
+					&tellPlayer($e, $msg);
+				}
+			}
+		}
+	}			
+}
+
+sub filterTopic {
+	my($me, $topic) = @_;
+	my($topics) = $objects[$me]{"topics"};
+	my($default);
+	return 1 if ($topic eq ""); 
+	if (!exists($objects[$me]{"topicdefault"})) {
+		$default = 1;
+	} else {
+		$default = $objects[$me]{"topicdefault"};
+	}
+	my(@topics) = split(/,/, $topics);
+	for $t (@topics) {
+		my($qm) = quotemeta($topic);
+		return !$default if ($t =~ /^$qm$/i); 
+	}
+	return $default;
+}
+
+sub joinTopic {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&joinTopicBody($me, $arg, $arg1, $arg2, 1);
+}
+
+sub leaveTopic {
+	my($me, $arg, $arg1, $arg2) = @_;
+	&joinTopicBody($me, $arg, $arg1, $arg2, 0);
+}
+
+sub joinTopicBody {
+	my($me, $arg, $arg1, $arg2, $join) = @_;
+	if ($arg =~ /^all$/i) {
+		$objects[$me]{"topicdefault"} = $join;
+		$objects[$me]{"topics"} = "";
+		if ($join) {
+			&tellPlayer($me, "Joining all topics.");
+		} else {
+			&tellPlayer($me, "Leaving all topics.");
+		}
+		return;
+	}
+	my($default, %topics);
+	if (!exists($objects[$me]{"topicdefault"})) {
+		$default = 1;
+	} else {
+		$default = $objects[$me]{"topicdefault"};
+	}
+	my(@topics) = split(/[ ,]+/, $arg);	
+	my($otopics) = $objects[$me]{"topics"};
+	my(@otopics) = split(/,/, $otopics);
+	$topics{$_} = 1 for (@otopics); 
+	for $t (@topics) {
+		my $id = &findContents($objects[$me]{"location"}, $t, $topic);
+		if ($id == -1) {
+			$id = &findContents($me, $t, $topic);
+			if ($id == -1) {
+				&tellPlayer($me, "No topic $t.");
+				next;
+			}
+		}
+		my($tname) = $objects[$id]{"name"};	
+		if ($default == $join) {
+			$topics{$tname} = 0;
+		} else {
+			$topics{$tname} = 1;
+		}
+	}
+	@topics = ( );
+	while (($key, $value) = each(%topics)) {
+		push @topics, $key if ($value); 
+	}
+	$objects[$me]{"topics"} = join(',', @topics);
+	&tellPlayer($me, "Topic list updated.");
+}
+
+sub tellPlayer {
+	my($who, $what) = @_;
+	$what =~ s/\s+$//;
+	# Filter annoyances out (apply gag filters).
+	my $name = $objects[$who]{"name"};
+	$name = quotemeta($name);
+	if ($objects[$who]{"flags"} & $flags{"creature"}{"value"}) { #If it's a creature, redirect to owner, with Prefix
+		$what = "$name> $what";
+		$who = $objects[$who]{"owner"};
+	}
+	return if (($objects[$who]{"gags"} =~ /^$name[,' ]/i) || ($objects[$who]{"gags"} =~ / $name[,' ]/i));
+	# The player is not interested.
+	foreach $gag (split(/ /, $objects[$who]{"gags"})) {
+		if ($gag ne "") {
+			$gag = quotemeta($gag);
+			return if ($what =~ /^$gag[,' ]/i); 
+			# The player is not interested.
+		}
+	} 
+	if ($objects[$who]{"activeFd"} ne $none) {
+		&tellActiveFd($objects[$who]{"activeFd"}, $what);
+	}
+}
+
+sub tellActiveFd {
+	my($active, $what) = @_;
+	$activeFds[$active]{"outbuf"} .= $what . "\r\n";
+	while (length($activeFds[$active]{"outbuf"}) > $flushOutput) {
+		$activeFds[$active]{"outbuf"} = "*FLUSHED*" .  substr($activeFds[$active]{"outbuf"}, $flushOutput / 2);
+	}
+}
+
+sub restore {
+	my($id, $dbVersion, $dbVersionKnown);
+	if (!CORE::open(IN, $dbFile)) {
+		print "Unable to read from " . $dbFile . ".\n";
+		print "Please read the documentation and follow\n";
+		print "all of the instructions carefully.\n";
+		exit 0;
+	}
+	$dbVersionKnown = 0;
+	while($id = <IN>) {
+		if (!$dbVersionKnown) {
+			$dbVersionKnown = 1;
+			if (!($id =~ /^\d+\.\d+\s*$/)) {
+				$dbVersion = 0.0;
+			} else {
+				$dbVersion = $id;
+				if ($dbVersion > $Version) {
+					print "This database was written by a newer version of PurlMUSH!\nYou need version $dbVersion to read it.\n";
+					close(IN);
+					return 0;	
+				}
+				next;	
+			}
+		}
+		chomp $id;
+		while (1) {
+			my($attribute, $value, $line);
+			$line = <IN>;
+			if ($line eq "") {
+				#Uh-oh
+				print "Database is truncated!\n";
+				return 0;
+			}
+			chomp $line;
+			if ($line eq "<END>") {
+				last;
+			}
+			# Get the attribute and the value
+			($attribute, $value) = split(/ /, $line, 2);  
+			# Unescape endlines
+			$value =~ s/\\n/\r\n/g;
+			# But a slash preceding one of those
+			# means an escaped LF is truly wanted
+			$value =~ s/\\\r\n/\\n/g;
+			$objects[$id]{$attribute} = $value;
+		}
+		$objects[$id]{"id"} = $id;
+		if ($id == 1) {
+			$objects[1]{"flags"} |= $flags{"wizard"}{"value"};
+		}
+		if ($objects[$id]{"type"} == $player) {
+			my($n);
+			$n = $objects[$id]{"name"};
+			$n =~ tr/A-Z/a-z/;
+			$playerIds{$n} = $id;
+		}		
+		# GOTCHA: $none and 0 are different
+		$objects[$id]{"activeFd"} = $none;
+	}
+	close(IN);
+	return 1;
+}
+
+sub mindb {
+	$objects[0]{"name"} = "Void";
+	$objects[0]{"type"} = $room;
+	$objects[0]{"contents"} = "1";
+	$objects[0]{"owner"} = 1;
+
+	$objects[1]{"name"} = "God";
+	$objects[1]{"type"} = $player;
+	$objects[1]{"location"} = 0;
+	$objects[1]{"owner"} = 1;
+	$objects[1]{"password"} = "bOrgCyfvw/s8C6q8E3vsSg"; #password is: lollipops
+	$objects[1]{"activeFd"} = $none;
+	$objects[1]{"flags"} |= $flags{"wizard"}{"value"};
+	$playerIds{"god"} = 1;
+}
+
+sub sendFile {
+	my($id, $fname) = @_;
+	&sendActiveFdFile($objects[$id]{"activeFd"}, $fname) if ($objects[$id]{"activeFd"} ne $none); 
+}
+
+sub sendActiveFdFile {
+	my($i, $fname) = @_;
+	if (!CORE::open(IN, $fname)) {
+		&tellActiveFd($i, "ERROR: the file " . $fname .  " is missing.");
+		return;
+	}
+	while(<IN>) {
+		s/\s+$//;	
+		&tellActiveFd($i, $_);
+	}
+	close(IN);
+}
+
+sub dropAll {
+	my($container) = @_;
+	my(@list);
+	@list = split(/,/, $objects[$container]{"contents"});
+	foreach my $e (@list) {
+		&command($container, "drop #" . $e);	
+	}
+	&tellPlayer($container, "You are not carrying anything.") if (!int(@list)); 
+}
+ 
+sub sendHome {	
+	my($me) = @_;
+	&dropAll($me) if ($objects[$objects[$me]{"location"}]{"flags"} & $flags{"puzzle"}{"value"}); 
+	&removeContents($objects[$me]{"location"}, $me);
+	&tellRoom($objects[$me]{"location"}, $none, $objects[$me]{"name"} . " goes home.") if (!($objects[$objects[$id]{"location"}]{"flags"} & $flags{"grand"}{"value"})); 
+	&addContents($objects[$me]{"home"}, $me);
+	&tellRoom($objects[$me]{"location"}, $me, $objects[$me]{"name"}. " arrives at home.") if (!($objects[$objects[$id]{"location"}]{"flags"} & $flags{"grand"}{"value"})); 
+	&tellPlayer($me, "You go home.");
+	&look($me, "", "", "");
+}
+
+sub timeFormat {
+	my $secs = shift;
+	if ($secs < 60) { 
+		return "00:00";
+	} elsif ($secs < 3600) {
+		return sprintf("00:%02d", int($secs / 60));
+	} elsif ($secs < 86400) {
+		my $modulo = $secs % 3600;
+		return sprintf("%02d:%02d", int($secs / 3600), int($modulo / 60));
+	} else {
+		my $modulo = $secs % 86400;
+		return sprintf("%dd %02d:%02d", int($secs / 86400), int($modulo / 3600), int(($modulo % 3600) / 60));
+	}
+}
+
+sub emote {
+	my($me, $arg, $arg1, $arg2) = @_;
+	$arg =~ s/^\s+//;
+	$_ = $arg;
+	unless ($arg1 eq "semi") {
+		$arg = " " . $arg;
+	}
+	&tellRoom($objects[$me]{"location"}, $none, $objects[$me]{"name"} . &substitute($me, $arg));
+}
+
+sub purge {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my($count);
+	my(%junk);
+	if (!&wizardTest($me)) {
+		&tellPlayer($me, "Sorry, that command is for wizards only.");
+		return;
+	}
+	# First pass: find junk; flag it as such
+	for ($i = 0; ($i <= $#objects); $i++) {
+		next if ($i < 2); 
+		# Objects 0 and 1 are indestructible
+		print STDERR "Purging: scanned $i of $#objects\n" if (!($i % 100)); 
+		if ($objects[$i]{"type"} eq "") {
+			$junk{$i} = 1;
+			$objects[$i]{"type"} = $none;	
+			$count++;
+		}
+	}
+	# Second pass: remove from inventories, destinations, etc. in an efficient way
+	for ($i = 0; ($i <= $#objects); $i++) {
+		next if ($junk{$i}); 
+		print STDERR "Purging: cleaned $i of $#objects\n" if (!($i % 100)); 
+		$objects[$i]{"owner"} = 1 if ($junk{$objects[$i]{"owner"}}); # Give to wizard 
+		$objects[$i]{"action"} = 0 if ($junk{$objects[$i]{"action"}}); # Unlink exit
+		my(@list) = split(/,/, $objects[$i]{"contents"});
+		my(@nlist);
+		for $l (@list) {	
+			next if ($junk{$l}); 
+			push @nlist, $l;
+		}
+		$objects[$i]{"contents"} = join(",", @nlist);
+	}
+	&tellPlayer($me, "$count broken objects recycled.");
+}
+
+sub emit {
+	my($me, $arg, $arg1, $arg2) = @_;
+	$arg =~ s/^\s+//;
+	if (!$allowEmit) {
+		&tellPlayer($me, "Sorry, that command is forbidden.");
+		return;
+	}
+	if ($arg eq "") {
+		&tellPlayer($me, "Syntax: \@emit message");
+	} else {
+		&tellRoom($objects[$me]{"location"}, $none, &substitute($me, $arg), $objects[$me]{"name"})
+	}
+}
+
+
+sub think {
+	my($me, $arg, $arg1, $arg2) = @_;
+	$arg =~ s/^\s+//;
+	&tellPlayer($me, substitute($me, $arg));
+}
+
+sub say {
+	my($me, $arg, $arg1, $arg2, $to) = @_;
+	$arg =~ s/^\s+//;
+	if ($to ne "") {
+		my(@ids) = &getIdsSpokenTo($me, $to);
+		return if (!int(@ids)); 
+		my($names, $i);
+		for ($i = 0; ($i < int(@ids)); $i++) {
+			if ($i > 0) {
+				if ($i == (int(@ids) - 1)) {
+					$names .= " and ";
+				} else {
+					$names .= ", ";
+				}
+			}
+			$names .= $objects[$ids[$i]]{"name"};
+		}
+		$to = " to $names";
+	}
+	&tellPlayer($me, "You say$to, \"" . substitute($me, $arg) . "\"");
+	&tellRoom($objects[$me]{"location"}, $me, $objects[$me]{"name"} .  " says$to, \"" . substitute($me, $arg) . "\"");
+}
+
+sub wall {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if (!&wizardTest($me)) {
+		&tellRoom($me, "Only a wizard can do that.");
+		return;
+	}
+	$arg =~ s/^\s+//;
+	for my $o (@objects) {
+		&tellPlayer($o->{"id"},	$objects[$me]{"name"} . " yells, \"" . substitute($me, $arg) . "\"") if ($o->{"type"} == $player); 
+	}
+}
+
+sub xyzzy {
+	my ($me, $arg, $arg1, $arg2) = @_;
+	&tellPlayer($me, ">>Foof!<<");
+	&tellPlayer($me, "You are inside a building, a well house for a large spring.");
+	&tellPlayer($me, "There are some keys on the ground here.");
+	&tellPlayer($me, "There is a shiny brass lamp nearby.");
+	&tellPlayer($me, "There is food here.");
+	&tellPlayer($me, "There is a bottle of water here.");
+	&tellPlayer($me, "You are able to take in your surroundings for a few seconds before a second >>Foof!<< deposits you back in your previous location. Apparently your wimpy wizardly powers don't enable you to stay in that distant land for long.");
+}
+
+sub success {
+	my($me, $id, $default, $odefault) = @_;
+	if ($objects[$id]{"success"} ne "") {
+		&tellPlayer($me, &substitute($me, $objects[$id]{"success"}));
+	} else {
+		&tellPlayer($me, $default) if ($default ne ""); 
+	}
+	if ($objects[$id]{"osuccess"} ne "") {
+		&tellRoom($objects[$me]{"location"}, $me, $objects[$me]{"name"} .  " " . &substitute($me, $objects[$id]{"osuccess"}));
+	} else {
+		&tellRoom($objects[$me]{"location"}, $me, $odefault) if ($odefault ne ""); 
+	}
+}
+
+sub fail {
+	my($me, $id, $default, $odefault) = @_;
+	if ($objects[$id]{"fail"} ne "") {
+		&tellPlayer($me, &substitute($me, $objects[$id]{"fail"}));
+	} else {
+		&tellPlayer($me, $default) if ($default ne ""); 
+	}
+	if ($objects[$id]{"ofail"} ne "") {
+		&tellRoom($objects[$me]{"location"}, $me, $objects[$me]{"name"} .  " " . &substitute($me, $objects[$id]{"ofail"}));
+	} else {
+		&tellRoom($objects[$me]{"location"}, $me, $odefault) if ($odefault ne ""); 
+	}
+}
+
+sub testLock {
+	my($me, $id) = @_;
+	my($lock, $i, $word, $expr, @words);
+	$lock = $objects[$id]{"lock"};	
+	$word = "";	
+	$expr = "";
+	my $len = length($lock);
+	for ($i = 0; ($i < $len); $i++) {
+		my($c);
+		$_ = $c = substr($lock, $i, 1);
+		if (/[\(\)\&\|\!]/) {
+			$word = &canonicalizeWord($me, $word);
+			$expr .= &lockEvalWord($me, $word) if ($word ne ""); 
+			$expr .= $c;
+			$word = "";
+		} else {
+			$word .= $c;
+		}
+	}
+	$word = &canonicalizeWord($me, $word);
+	$expr .= &lockEvalWord($me, $word) if ($word ne ""); 
+
+	# No lock
+
+	return 1 if (!length($expr)); 
+
+	# Take advantage of Perl. We know there is nothing here other than (, ), &, |, !, 1, and 0.
+
+	return eval($expr);
+}
+
+sub canonicalizeWord {
+	my($me, $word) = @_;
+	$word =~ s/^\s+//g;
+	$word =~ s/\s+$//g;
+	if ($word eq "me") {
+		$word = "#" . $me;
+	} elsif ($word eq "here") {	
+		$word = "#" . $objects[$me]{"location"};
+	} elsif (substr($word, 0, 1) eq "*") {
+		my($name);
+		($name = substr($word, 1)) =~ tr/A-Z/a-z/;
+		$word = "#" . $playerIds{$name} if (exists($playerIds{$name})); 
+	}
+	return $word;
+}
+
+sub lockEvalWord {
+	my($me, $word) = @_;
+
+	$word =~ s/^\s+//g;
+	$word =~ s/\s+$//g;
+
+	return 1 if ($word eq ""); 
+	return 1 if (("#" . $me) eq $word); 
+	return 1 if (&findContents($me, $word) != $none); 
+	return 0;
+}
+
+sub sexTest {
+	my ($me, $f, $m, $n) = @_;
+	my ($x);
+	if ($objects[$me]{"sex"} =~ /^female$/i) {
+		$x = $f;
+	} elsif ($objects[$me]{"sex"} =~ /^male$/i) {
+		$x = $m;
+	} else {
+		$x = $n;
+	}
+	return $x;
+}
+
+sub test {
+	my($me, $arg, $arg1, $arg2) = @_;
+	if (exists($playerIds{"muffin"})) {
+		&tellPlayer($me, "Exists in playerIds hash.");
+	}
+	if ($objects[$playerIds{"muffin"}]{"flags"} & $flags{"creature"}{"value"}) {
+		&tellPlayer($me, "It's passed the Creature Test.");
+	}
+}
+
+sub debug {
+	my($me, $arg, $arg1, $arg2) = @_;
+	my $target = $arg;
+	$target =~ s/#//g;
+	&tellPlayer($me, "DEBUG ON $objects[$target]{'name'}");
+	foreach my $key (sort keys %{$objects[$target]}) {
+		my $string = $key . ": " . $objects[$target]{$key};
+		&tellPlayer($me, $string);
+	}
+}
+
+sub substitute {
+	my($me, $arg) = @_;
+	my($s, $p, $o, $n, $a, $r, $l, $dbref);
+	$_ = $arg;
+	$dbref = "#" . $me;
+	$l = "#" . $objects[$me]{"location"};
+	return $arg if (!/%/); 
+	$s = sexTest($me, "she", "he", "it");
+	$arg =~ s/\%s/$s/ge;
+	$s = ucfirst $s;
+	$arg =~ s/\%S/$s/ge;
+	$n = $objects[$me]{"name"};
+	$arg =~ s/\%n/$n/ge;
+	$n = ucfirst $n;
+	$arg =~ s/\%N/$n/ge;
+	$p = sexTest($me, "her", "his", "its");
+	$arg =~ s/\%p/$p/ge;
+	$p = ucfirst $p;
+	$arg =~ s/\%P/$p/ge;
+	$a = sexTest($me, "hers", "his", "its");
+	$arg =~ s/\%a/$a/ge;	
+	$a = ucfirst $a;
+	$arg =~ s/\%A/$a/ge;
+	$o = sexTest($me, "her", "him", "its");
+	$arg =~ s/\%o/$o/ge;
+	$o = ucfirst $o;
+	$arg =~ s/\%O/$o/ge;
+	$r = "\n";
+	$t = "\t";
+	$b = " ";
+	$arg =~ s/\%b/$b/ge;
+	$arg =~ s/\%B/$b/ge;
+	$arg =~ s/\%t/$t/ge;
+	$arg =~ s/\%T/$t/ge;
+	$arg =~ s/\%r/$r/ge;
+	$arg =~ s/\%R/$r/ge;
+	$arg =~ s/\%\#/$dbref/ge;
+	$arg =~ s/\%l/$l/gei;
+	$arg =~ s/\%\%/\%/g;	
+	#ANSI
+	$arg =~ s/\%xh/\033[1m/g;
+	$arg =~ s/\%xn/\033[0m/g;
+	$arg =~ s/\%xu/\033[4m/g;
+	$arg =~ s/\%xf/\033[5m/g;
+	$arg =~ s/\%xi/\033[7m/g;
+	$arg =~ s/\%xx/\033[30m/g;
+	$arg =~ s/\%xr/\033[31m/g;
+	$arg =~ s/\%xg/\033[32m/g;
+	$arg =~ s/\%xy/\033[33m/g;
+	$arg =~ s/\%xb/\033[34m/g;
+	$arg =~ s/\%xm/\033[35m/g;
+	$arg =~ s/\%xc/\033[36m/g;
+	$arg =~ s/\%xw/\033[37m/g;
+	$arg =~ s/\%xX/\033[40m/g;
+	$arg =~ s/\%xR/\033[41m/g;
+	$arg =~ s/\%xG/\033[42m/g;
+	$arg =~ s/\%xY/\033[43m/g;
+	$arg =~ s/\%xB/\033[44m/g;
+	$arg =~ s/\%xM/\033[45m/g;
+	$arg =~ s/\%xC/\033[46m/g;
+	$arg =~ s/\%xW/\033[47m/g;
+	return $arg . "\033[0m";
+}
+
+sub idBounds {
+	my($id) = @_;
+	$id = $none if ($id > $#objects); 
+	$id = $none if ($id < 0); 
+	return $id;
+}
+
+sub wizardTest {
+	my($me) = @_;
+	return 1 if (($me == 1) || ($objects[$me]{"flags"} & $flags{"wizard"}{"value"}));  # Object #1 is always a wizard
+}
+
+sub readData {
+	my($i, $fd) = @_;
+	# Append to the input buffer
+	my $len = length($activeFds[$i]{"inbuf"});
+	my $got = sysread($fd, $activeFds[$i]{"inbuf"}, 4096, $len);
+	if (($got == 0) || ((!defined($got)) && ($! != EINTR) && ($! != EAGAIN))) {
+		&closeActiveFd($i);
+		return;
+	}
+	&examineData($i);
+}
+
+sub examineData {
+	my($i) = @_;
+	my($where);
+			
+	# Split into commands
+	if ($activeFds[$i]{"inbuf"} =~ /\n/) {
+		@commands = split(/\n/, $activeFds[$i]{"inbuf"});
+		my($e, $end);
+		$_ = $activeFds[$i]{"inbuf"};
+		if (!(/\n$/)) {
+			$end = $#commands - 1;
+		} else {
+			$end = $#commands;
+		}
+		for ($e = 0; ($e <= $end); $e++) {
+			&input($i, $commands[$e]) if (length($commands[$e])); 
+		}
+		if ($end == ($#commands - 1)) {
+			$activeFds[$i]{"inbuf"} = $commands[$#commands];
+		} else {
+			$activeFds[$i]{"inbuf"} = "";
+		}
+	}
+	if (length($activeFds[$i]{"inbuf"}) >= 4096) {
+		&input($i, $activeFds[$i]{"inbuf"});
+		$activeFds[$i]{"inbuf"} = "";
+	}
+}	
+
+sub writeData {
+	my($i, $fd) = @_;
+	my($got, $len);
+
+	# Try to send the output buffer
+	$len = length($activeFds[$i]{"outbuf"});
+	$got = syswrite($fd, $activeFds[$i]{"outbuf"}, $len);
+	if  ((!defined($got)) && ($! != EINTR) && ($! != EAGAIN)) {
+		&closeActiveFd($i);
+		return;
+	}
+	$activeFds[$i]{"outbuf"} = substr($activeFds[$i]{"outbuf"}, $got);
+}
+
+sub login {
+	my($id, $aindex) = @_;
+	$objects[$id]{"location"} = 0 if ($objects[$id]{"location"} eq "");
+	&tellRoom($objects[$id]{"location"}, $none, $objects[$id]{"name"}. " has connected.") if (!($objects[$objects[$id]{"location"}]{"flags"} & $flags{"grand"}{"value"})); 
+	$objects[$id]{"activeFd"} = $aindex;
+	$objects[$id]{"ip"} = $activeFds[$aindex]{"ip"};
+	$objects[$id]{"site"} = $activeFds[$aindex]{"site"};
+	$objects[$id]{"on"} = $now;
+	$objects[$id]{"last"} = $now;
+	$objects[$id]{"lastPing"} = $now;
+	&sendFile($id, $motdFile);
+	&command($id, "look");
+}
+
+sub plumber {
+	$SIG{'PIPE'} = 'plumber';
+}
+
+sub builderTest {
+	my($me) = @_;
+	return (($objects[$me]{"flags"} & $flags{"builder"}{"value"}) || ($objects[$me]{"flags"} & $flags{"wizard"}{"value"})) ? 1 : 0;
+}
+
+sub fdClosureTimeout {
+	$fdClosureTimedOut = 1;
+}
+
+1;
+

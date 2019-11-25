@@ -1,0 +1,81 @@
+Welcome to PurlMUSH, a different way to do MUSH. This project is a labor of 
+love more than anything else. It is a determined effort to take the robust and
+functional platforms provided by PennMUSH and TinyMUX and implement them using
+the Perl programming language. That means that, by definition, it is a proof-
+of-concept. 
+
+Of course, that also means that you can have fun with it, as well. Everything
+that has gone into the development of this project is based on the idea of 
+code being fun...and something of an obsession as well.
+
+A little bit of history on this project:
+- Originally this project was started sometime around 2000 or 2001, when the
+  Santiago downloaded and registered a copy of PerlMUD from Boutell.com. Yes,
+  the software was registered, conferring the rights to modify the code on to
+  the Santiago. The idea was tantalizing...a MU*, in Perl. And thus, PurlMUSH
+  was born.
+
+- Help was solicited from a number of people online, most notably Steele from
+  steelemountain.com, who shared Santiago's vision for doing outrageously cool
+  stuff with the code.
+
+- June 2005 - Project was effectively halted when Santiago began the RL trauma
+  of separating and divorcing his wife. The code was lost to the divorce, and
+  has not been seen since. Baby Jesus cried. The code had been some of the best
+  work he had ever done in Perl.
+
+- February 2008 - A new version of PerlMUD was downloaded by Santiago, and he
+  felt the pull and tug of that earlier obsession. He renewed his license with
+  Boutell.com and began working on the code in earnest. Friends were able to 
+  provide server space, and the work began.
+
+A little bit of the vision for what PurlMUSH might become:
+- Fully object-oriented code structure, with each db object type having its own
+  corresponding code object. Ideally, Flags and Logging will get OOP'ed too.
+
+- Well-formed and fully compliant XML database flatfile structure.
+
+- Internal systems such as comm/channels, BBS, Places/Mutter, IC time (with 
+  configurable ratios), Cron, and whatever other goodies are considered to be
+  'standard' softcoded systems on MUSHes today. Myrrdin's amazing softcoded
+  systems are the de facto standard for BBS and Cron, there's two standard
+  places and mutter packages out there, and a million things for IC time and
+  other functionality like weather (Keran's *shudder*) or a +wear-style multi-
+  descer (MANY many of these out there). One of the 'standard' and dreaded
+  jobs that goes into starting a MU* is quoting in these very standard bits
+  of code. Why? Projects like Sandbox Globals Project (SGP, again *shudder*)
+  are built around the idea that your game comes with code. Comes with the 
+  systems that you need, "out of the box". Insta-MUSH, just add water. 
+
+- Easy to setup. Purl doesn't require compiling. You don't have to know a lot
+  of fancy Unix/Linux commands to get your game running. Pretty much, as long
+  as your server is connected to the Internet, has a "standard" installation
+  of Perl (and eventually ActivePerl for Windows), you will be able to have a
+  PurlMUSH up and running in under five minutes. No, seriously. There will be
+  (eventually) a config script that you will run which will query for the 
+  necessary bits in the mush.cnf file, the things that won't be "assumed". For
+  example, IP and hostname, file path for the db, etc. Other configuration 
+  options can be changed by hand-editing the file. Once you've been through the
+  config script, you type ./Startpurl (or double-click the icon if you're on
+  Windows) and VIOLA! You have a MUSH.
+
+INSTALLATION
+Download the code.
+Unpack the code - tar jvxf purlmush-###.tar.bz2 (where ### is the version)
+Edit the mush.cnf file to suit your mush and environment.
+Type: ./Startpurl &
+Connect to the host and port you have specified in the mush.cnf file and log in
+as the God character (default password: lollipops).
+
+HELP
+If you need help with PurlMUSH, first off: RTFM. Read the help files. If those
+don't help, read the blog (http://purlmush.blogspot.com). If that doesn't help,
+e-mail purlmush@gmail.com and Santiago will answer your query as best he can.
+
+EXTENDING PURLMUSH
+Yes, we want to be able to have modules that extend the functionality of Purl.
+If you have Perl-fu and want to build and contribute modules, please do so. In
+time, there will be a central repository for submissions, sort of a CPAN for 
+Purl. For now, just e-mail them to Santiago (purlmush@gmail.com).
+
+Good luck, and happy MUSHing!
